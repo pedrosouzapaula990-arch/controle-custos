@@ -89,10 +89,24 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 .hint{font-size:12px;color:var(--muted)}
 .ref{font-size:11px;font-weight:600;color:var(--accent);margin-left:4px}
 a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;margin-left:6px}
+.lblrow{display:flex;justify-content:space-between;align-items:center}
+.linkbtn{border:0;background:none;padding:0;color:var(--accent);font-size:12px;font-weight:600}
+.optlist{list-style:none;margin:0 0 12px;padding:0;max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.optlist li{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
+.optlist li:last-child{border-bottom:0}
+.optlist button{padding:3px 9px;font-size:12px}
+.addrow{display:flex;gap:8px}
 .fab{position:fixed;right:18px;bottom:18px;border-radius:999px;padding:14px 20px;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none}
 @media(max-width:640px){.hint{font-size:12px;color:var(--muted)}
 .ref{font-size:11px;font-weight:600;color:var(--accent);margin-left:4px}
 a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;margin-left:6px}
+.lblrow{display:flex;justify-content:space-between;align-items:center}
+.linkbtn{border:0;background:none;padding:0;color:var(--accent);font-size:12px;font-weight:600}
+.optlist{list-style:none;margin:0 0 12px;padding:0;max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.optlist li{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
+.optlist li:last-child{border-bottom:0}
+.optlist button{padding:3px 9px;font-size:12px}
+.addrow{display:flex;gap:8px}
 .fab{display:block}#addTop{display:none}}
 </style>
 </head>
@@ -148,7 +162,7 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 <div class="overlay" id="ov">
   <form class="modal" id="form">
     <h3 id="formTitle">Novo custo</h3>
-    <div class="field"><label for="sCat">Categoria</label>
+    <div class="field"><div class="lblrow"><label for="sCat">Categoria</label><button type="button" class="linkbtn" data-lista="cats">Editar lista</button></div>
       <select id="sCat" class="pick" data-new="nCat"></select>
       <input id="nCat" class="newopt" placeholder="Digite a nova categoria" style="display:none">
     </div>
@@ -159,7 +173,7 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
     </div>
     <div class="field" id="fMes" style="display:none"><label for="iMes">Mês de referência</label><input id="iMes" type="month"></div>
     <div class="row2">
-      <div class="field"><label for="sBy">Pago por</label>
+      <div class="field"><div class="lblrow"><label for="sBy">Pago por</label><button type="button" class="linkbtn" data-lista="by">Editar lista</button></div>
         <select id="sBy" class="pick" data-new="nBy"></select>
         <input id="nBy" class="newopt" placeholder="Nome" style="display:none">
       </div>
@@ -175,6 +189,17 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
   </form>
 </div>
 
+
+<div class="overlay" id="ovLista">
+  <form class="modal" id="formLista">
+    <h3 id="lTitle">Editar lista</h3>
+    <ul class="optlist" id="lItems"></ul>
+    <div class="addrow"><input id="lNew" placeholder="Nova opção"><button type="submit" class="primary">Adicionar</button></div>
+    <div class="hint" style="margin-top:8px">Remover uma opção não apaga os lançamentos que já usam ela.</div>
+    <div class="err" id="lErr"></div>
+    <div class="mfoot"><button type="button" id="lClose">Concluir</button></div>
+  </form>
+</div>
 
 <div class="overlay" id="ovBaixa">
   <form class="modal" id="formBaixa">
@@ -255,7 +280,7 @@ function render(){
   $("byMonth").innerHTML=ms.map((m,ix)=>`<div class="col ${ix===5?"cur":""}" title="${brl(m.v)}"><div class="t">${m.v?(m.v>=1000?(m.v/1000).toFixed(1).replace(".",",")+"k":Math.round(m.v)):""}</div><div class="b" style="height:${m.v/mmax*100}%"></div><div class="m">${mLabel(m.d,true)}</div></div>`).join("");
 
   // filtros e listas
-  const allCats=[...new Set([...DEFAULT_CATS,...items.map(i=>i.categoria).filter(Boolean)])];
+  const allCats=[...new Set([...catOptions(),...items.map(i=>i.categoria).filter(Boolean)])];
   const fc=$("fCat").value;
   $("fCat").innerHTML='<option value="">Todas categorias</option>'+allCats.map(c=>`<option ${c===fc?"selected":""}>${esc(c)}</option>`).join("");
   $("descList").innerHTML=[...new Set(items.map(i=>i.descricao).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join("");
@@ -279,8 +304,48 @@ function render(){
       <td class="actions">${act}</td></tr>`}).join("");
 }
 
-function catOptions(){return [...new Set([...DEFAULT_CATS,...items.map(i=>i.categoria).filter(Boolean)])]}
-function byOptions(){return [...new Set([...DEFAULT_BY,...items.map(i=>i.pagoPor).filter(Boolean)])]}
+let config=null;
+function catOptions(){return config?.cats||DEFAULT_CATS}
+function byOptions(){return config?.by||DEFAULT_BY}
+async function salvarConfig(c){
+  config=c;
+  await api("save",{item:{id:"__config__",data:"",descricao:"(configuração do site - não apagar)",categoria:"",valor:0,pagoPor:"",status:"config",obs:JSON.stringify(c),criadoEm:0,mesRef:"",comprovante:""}});
+}
+async function addOpcao(tipo,valor){
+  valor=(valor||"").trim();if(!valor)return;
+  const c={cats:[...catOptions()],by:[...byOptions()]};
+  if(c[tipo].some(o=>o.toLowerCase()===valor.toLowerCase()))return;
+  c[tipo].push(valor);await salvarConfig(c);
+}
+let listaTipo=null;
+function renderLista(){
+  const ops=listaTipo==="cats"?catOptions():byOptions();
+  $("lItems").innerHTML=ops.length?ops.map((o,ix)=>`<li><span>${esc(o)}</span><button type="button" data-rm="${ix}">Remover</button></li>`).join(""):'<li class="hint">Lista vazia</li>';
+}
+function abrirLista(tipo){
+  listaTipo=tipo;$("lTitle").textContent=tipo==="cats"?"Editar categorias":"Editar \"Pago por\"";
+  $("lNew").value="";$("lErr").textContent="";renderLista();$("ovLista").classList.add("open");setTimeout(()=>$("lNew").focus(),50);
+}
+async function fecharLista(){
+  $("ovLista").classList.remove("open");
+  if($("ov").classList.contains("open")){
+    const cv=readPick("sCat","nCat"),bv=readPick("sBy","nBy");
+    fillPick("sCat","nCat",catOptions(),cv);fillPick("sBy","nBy",byOptions(),bv,"(não informar)");updMes();
+  }
+}
+document.querySelectorAll("[data-lista]").forEach(b=>b.onclick=()=>abrirLista(b.dataset.lista));
+$("lClose").onclick=fecharLista;
+$("ovLista").addEventListener("click",e=>{if(e.target===$("ovLista"))fecharLista()});
+$("formLista").addEventListener("submit",async e=>{
+  e.preventDefault();$("lErr").textContent="";
+  try{await addOpcao(listaTipo,$("lNew").value);$("lNew").value="";renderLista()}catch(err){$("lErr").textContent="Não foi possível salvar: "+err.message}
+});
+$("lItems").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-rm]");if(!b)return;
+  const c={cats:[...catOptions()],by:[...byOptions()]};c[listaTipo].splice(+b.dataset.rm,1);
+  b.disabled=true;$("lErr").textContent="";
+  try{await salvarConfig(c);renderLista()}catch(err){$("lErr").textContent="Não foi possível salvar: "+err.message;b.disabled=false}
+});
 function fillPick(sel,inp,opts,val,emptyLabel){
   if(val&&!opts.includes(val))opts=[...opts,val];
   $(sel).innerHTML=(emptyLabel?`<option value="">${emptyLabel}</option>`:`<option value="" disabled ${val?"":"selected"}>Selecione…</option>`)
@@ -328,6 +393,8 @@ $("form").addEventListener("submit",async e=>{
   const id=editingId||("c"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
   $("save").disabled=true;
   try{await api("save",{item:{id,...doc}});
+    if($("sCat").value===NEW)await addOpcao("cats",doc.categoria);
+    if($("sBy").value===NEW)await addOpcao("by",doc.pagoPor);
     if(file){$("save").textContent="Enviando comprovante…";await uploadComprovante(id,file)}
     const [y,m]=doc.data.split("-");cur=new Date(+y,+m-1,1);closeForm();await load()}
   catch(err){$("fErr").textContent="Não foi possível salvar: "+err.message}
@@ -411,7 +478,10 @@ function normData(d){
 async function load(){
   try{
     const r=await api("list");
-    items=(r.items||[]).map(i=>({...i,valor:+i.valor,data:normData(i.data),mesRef:normData(i.mesRef).slice(0,7)}));
+    const all=r.items||[];
+    const cfg=all.find(i=>i.id==="__config__");
+    if(cfg){try{const c=JSON.parse(cfg.obs);if(Array.isArray(c.cats)&&Array.isArray(c.by))config=c}catch(e){}}
+    items=all.filter(i=>i.id!=="__config__"&&i.status!=="config").map(i=>({...i,valor:+i.valor,data:normData(i.data),mesRef:normData(String(i.mesRef||"")).slice(0,7)}));
     $("status").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" · "+items.length+" lançamento(s) no total";
     showBanner("");render();return true;
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
