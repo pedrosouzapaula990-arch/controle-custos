@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de Custos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f5f6f8;--card:#fff;--ink:#16181d;--muted:#6b7280;--line:#e5e7eb;
+  --accent:#0f766e;--accent-soft:#e6f4f2;--red:#b42318;--red-soft:#fdecea;--amber:#b45309;--amber-soft:#fef3e2;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#111315;--card:#1a1d21;--ink:#eef0f3;--muted:#9aa1ab;--line:#2a2e34;
+  --accent:#2dd4bf;--accent-soft:#12302d;--red:#f97066;--red-soft:#3a1d1b;--amber:#fbbf24;--amber-soft:#3a2d12;}
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 80px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+h1{font-size:22px;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.monthnav{display:flex;align-items:center;gap:6px}
+.monthnav span{min-width:130px;text-align:center;font-weight:600}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+@media (prefers-color-scheme:dark){button.primary{color:#062320}}
+button.icon{padding:6px 10px}
+button:disabled{opacity:.5;cursor:default}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.kpi .lbl{color:var(--muted);font-size:12px;font-weight:500}
+.kpi .val{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi .note{font-size:12px;margin-top:2px;color:var(--muted)}
+.up{color:var(--red)}.down{color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}}
+h2{font-size:14px;margin:0 0 12px;font-weight:600}
+.bar-row{display:grid;grid-template-columns:120px 1fr 90px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
+.bar-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:10px;border-radius:5px;background:var(--accent)}
+.bar-track{background:var(--accent-soft);border-radius:5px}
+.bar-row .v{text-align:right;font-variant-numeric:tabular-nums}
+.cols{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:6px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.col .b{width:100%;max-width:44px;background:var(--accent);border-radius:6px 6px 2px 2px;min-height:2px}
+.col.cur .b{background:var(--ink)}
+.col .m{font-size:11px;color:var(--muted);text-transform:capitalize}
+.col .t{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:13px;padding:8px 0}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+select,input{min-width:0;width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.toolbar select{width:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;cursor:pointer;border:0}
+.pill.pago{background:var(--accent-soft);color:var(--accent)}
+.pill.pendente{background:var(--amber-soft);color:var(--amber)}
+.cat{font-size:12px;color:var(--muted)}
+.actions{white-space:nowrap;text-align:right}
+.actions button{padding:4px 8px;font-size:12px}
+@media(max-width:640px){
+  thead{display:none}
+  tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  td{border:0;padding:0}
+  td.d-date{grid-column:1;font-size:12px;color:var(--muted)}
+  td.d-desc{grid-column:1}
+  td.d-val{grid-column:2;grid-row:1 / span 2;align-self:center;font-weight:600}
+  td.d-by{grid-column:1;font-size:12px;color:var(--muted)}
+  td.d-st{grid-column:1}
+  td.actions{grid-column:2;grid-row:3 / span 2;align-self:end}
+}
+.status{font-size:12px;color:var(--muted);margin-top:8px}
+.banner{background:var(--red-soft);color:var(--red);padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:13px;display:none}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.overlay.open{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 14px;font-size:17px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--muted);font-weight:500}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.err{color:var(--red);font-size:12px;min-height:16px}
+.hint{font-size:12px;color:var(--muted)}
+.ref{font-size:11px;font-weight:600;color:var(--accent);margin-left:4px}
+a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;margin-left:6px}
+.fab{position:fixed;right:18px;bottom:18px;border-radius:999px;padding:14px 20px;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none}
+@media(max-width:640px){.hint{font-size:12px;color:var(--muted)}
+.ref{font-size:11px;font-weight:600;color:var(--accent);margin-left:4px}
+a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;margin-left:6px}
+.fab{display:block}#addTop{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Controle de Custos</h1>
+      <div class="sub">Lançamentos da empresa, salvos na nuvem</div>
+    </div>
+    <div class="monthnav">
+      <button class="icon" id="prev" aria-label="Mês anterior">‹</button>
+      <span id="monthLabel"></span>
+      <button class="icon" id="next" aria-label="Próximo mês">›</button>
+      <button class="primary" id="addTop">+ Novo custo</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="kpis">
+    <div class="card kpi"><div class="lbl">Total do mês</div><div class="val" id="kTotal">—</div><div class="note" id="kComp"></div></div>
+    <div class="card kpi"><div class="lbl">Já pago</div><div class="val" id="kPago">—</div><div class="note" id="kPagoN"></div></div>
+    <div class="card kpi"><div class="lbl">A pagar</div><div class="val" id="kPend">—</div><div class="note" id="kPendN"></div></div>
+    <div class="card kpi"><div class="lbl">Total no ano</div><div class="val" id="kAno">—</div><div class="note" id="kAnoN"></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h2>Por categoria (mês)</h2><div id="byCat"></div></div>
+    <div class="card"><h2>Últimos 6 meses</h2><div class="cols" id="byMonth"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">Lançamentos</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="fCat"><option value="">Todas categorias</option></select>
+        <select id="fSt"><option value="">Todos</option><option value="pago">Pagos</option><option value="pendente">A pagar</option></select>
+        <button id="copyCsv">Copiar planilha</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Pago por</th><th>Status</th><th class="num">Valor</th><th></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+    <div class="empty" id="emptyList" style="display:none">Nenhum custo lançado neste mês.</div>
+    <div class="status" id="status">Conectando…</div>
+  </div>
+</div>
+
+<button class="primary fab" id="addFab">+ Novo custo</button>
+
+<div class="overlay" id="ov">
+  <form class="modal" id="form">
+    <h3 id="formTitle">Novo custo</h3>
+    <div class="field"><label for="sCat">Categoria</label>
+      <select id="sCat" class="pick" data-new="nCat"></select>
+      <input id="nCat" class="newopt" placeholder="Digite a nova categoria" style="display:none">
+    </div>
+    <div class="field"><label for="iDesc">Descrição</label><input id="iDesc" list="descList" required placeholder="Ex.: Anúncios Meta – semana 1"><datalist id="descList"></datalist></div>
+    <div class="row2">
+      <div class="field"><label for="iVal">Valor (R$)</label><input id="iVal" inputmode="decimal" required placeholder="0,00"></div>
+      <div class="field"><label for="iDate">Data</label><input id="iDate" type="date" required></div>
+    </div>
+    <div class="field" id="fMes" style="display:none"><label for="iMes">Mês de referência</label><input id="iMes" type="month"></div>
+    <div class="row2">
+      <div class="field"><label for="sBy">Pago por</label>
+        <select id="sBy" class="pick" data-new="nBy"></select>
+        <input id="nBy" class="newopt" placeholder="Nome" style="display:none">
+      </div>
+      <div class="field"><label for="iSt">Status</label><select id="iSt"><option value="pago">Pago</option><option value="pendente">A pagar</option></select></div>
+    </div>
+    <div class="field"><label for="iFile">Comprovante (opcional)</label><input id="iFile" type="file" accept="image/*,application/pdf"><div class="hint" id="fileHint"></div></div>
+    <div class="field"><label for="iObs">Observação (opcional)</label><input id="iObs"></div>
+    <div class="err" id="fErr"></div>
+    <div class="mfoot">
+      <button type="button" id="cancel">Cancelar</button>
+      <button type="submit" class="primary" id="save">Salvar</button>
+    </div>
+  </form>
+</div>
+
+
+<div class="overlay" id="ovBaixa">
+  <form class="modal" id="formBaixa">
+    <h3>Dar baixa</h3>
+    <div class="hint" id="bInfo" style="margin-bottom:12px"></div>
+    <div class="field"><label for="bFile">Comprovante de pagamento</label><input id="bFile" type="file" accept="image/*,application/pdf"></div>
+    <div class="err" id="bErr"></div>
+    <div class="mfoot">
+      <button type="button" id="bCancel">Cancelar</button>
+      <button type="submit" class="primary" id="bSave">Marcar como pago</button>
+    </div>
+  </form>
+</div>
+
+<script>
+// ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
+const API_URL = "https://script.google.com/macros/s/AKfycbzdVqdYAElufIOZppKk7nyDx8qczvp8rm7vbqww6yp3BsC_ubpK58oGalvl67h1E1EnpQ/exec";
+// =====================================================================
+let jsonpN=0;
+function api(action, payload){
+  return new Promise((resolve,reject)=>{
+    const cb="__cb"+(++jsonpN)+"_"+Date.now();
+    const params=new URLSearchParams({action,callback:cb});
+    if(payload&&payload.item)params.set("item",JSON.stringify(payload.item));
+    if(payload&&payload.id)params.set("id",payload.id);
+    const sc=document.createElement("script");
+    const t=setTimeout(()=>{done();reject(new Error("Sem resposta da API (tempo esgotado)."))},20000);
+    function done(){clearTimeout(t);delete window[cb];sc.remove()}
+    window[cb]=r=>{done();if(r&&r.ok)resolve(r);else reject(new Error((r&&r.error)||"Resposta inválida da API."))};
+    sc.onerror=()=>{done();reject(new Error("Não foi possível acessar a API. Confira se o Apps Script está com acesso \"Anyone\"."))};
+    sc.src=API_URL+"?"+params.toString();
+    document.body.appendChild(sc);
+  });
+}
+const DEFAULT_BY=["Pedro","Darbello","Jean","Caixa da empresa"];
+const NEW="__novo__";
+const DEFAULT_CATS=["Pagamento","RV","Servidor / Painel","Anúncios (Meta Ads)","Ferramentas (Kommo, WhatsApp API)","Impostos e contabilidade","Taxas de pagamento","Escritório / Internet","Outros"];
+const brl=v=>(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const $=id=>document.getElementById(id);
+let db=null, items=[], cur=new Date(); cur.setDate(1);
+let editingId=null, confirmId=null;
+
+function ym(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+function mLabel(d,short){return d.toLocaleDateString("pt-BR",short?{month:"short"}:{month:"long",year:"numeric"}).replace(".","")}
+function parseVal(s){s=String(s).trim().replace(/[R$\s]/g,"");if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");const n=parseFloat(s);return isFinite(n)?Math.round(n*100)/100:NaN}
+const precisaMes=c=>/pagamento|^rv\b|remunera|sal[aá]rio|comiss/i.test(c||"")&&!/taxas? de pagamento/i.test(c||"");
+function hoje(){const t=new Date();return ym(t)+"-"+String(t.getDate()).padStart(2,"0")}
+function mesLabel(m){if(!/^\d{4}-\d{2}$/.test(m||""))return m||"";const [y,mm]=m.split("-");return new Date(+y,+mm-1,1).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","").replace(" de ","/")}
+function updMes(){const c=readPick("sCat","nCat");$("fMes").style.display=precisaMes(c)?"flex":"none"}
+function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML}
+
+function render(){
+  {const t=mLabel(cur);$("monthLabel").textContent=t.charAt(0).toUpperCase()+t.slice(1);}
+  const key=ym(cur);
+  const prev=new Date(cur);prev.setMonth(prev.getMonth()-1);const pkey=ym(prev);
+  const month=items.filter(i=>(i.data||"").startsWith(key));
+  const sum=a=>a.reduce((s,i)=>s+(+i.valor||0),0);
+  const tot=sum(month), ptot=sum(items.filter(i=>(i.data||"").startsWith(pkey)));
+  const pago=month.filter(i=>i.status!=="pendente"), pend=month.filter(i=>i.status==="pendente");
+  $("kTotal").textContent=brl(tot);
+  if(ptot>0){const p=(tot-ptot)/ptot*100;$("kComp").innerHTML=`<span class="${p>0?"up":"down"}">${p>0?"▲":"▼"} ${Math.abs(p).toFixed(0)}%</span> vs mês anterior`}
+  else $("kComp").textContent=month.length+" lançamento(s)";
+  $("kPago").textContent=brl(sum(pago));$("kPagoN").textContent=pago.length+" lançamento(s)";
+  $("kPend").textContent=brl(sum(pend));$("kPendN").textContent=pend.length+" lançamento(s)";
+  const yr=String(cur.getFullYear());const yItems=items.filter(i=>(i.data||"").startsWith(yr));
+  $("kAno").textContent=brl(sum(yItems));
+  const monthsWith=new Set(yItems.map(i=>i.data.slice(0,7))).size;
+  $("kAnoN").textContent=monthsWith?"Média "+brl(sum(yItems)/monthsWith)+"/mês":yr;
+
+  // categorias
+  const cats={};month.forEach(i=>{cats[i.categoria||"Outros"]=(cats[i.categoria||"Outros"]||0)+(+i.valor||0)});
+  const ce=Object.entries(cats).sort((a,b)=>b[1]-a[1]);const cmax=ce[0]?.[1]||1;
+  $("byCat").innerHTML=ce.length?ce.map(([n,v])=>`<div class="bar-row"><div class="name" title="${esc(n)}">${esc(n)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(2,v/cmax*100)}%"></div></div><div class="v">${brl(v)}</div></div>`).join(""):'<div class="empty">Sem custos neste mês.</div>';
+
+  // 6 meses
+  const ms=[];for(let k=5;k>=0;k--){const d=new Date(cur);d.setMonth(d.getMonth()-k);const kk=ym(d);ms.push({d,k:kk,v:sum(items.filter(i=>(i.data||"").startsWith(kk)))})}
+  const mmax=Math.max(...ms.map(m=>m.v),1);
+  $("byMonth").innerHTML=ms.map((m,ix)=>`<div class="col ${ix===5?"cur":""}" title="${brl(m.v)}"><div class="t">${m.v?(m.v>=1000?(m.v/1000).toFixed(1).replace(".",",")+"k":Math.round(m.v)):""}</div><div class="b" style="height:${m.v/mmax*100}%"></div><div class="m">${mLabel(m.d,true)}</div></div>`).join("");
+
+  // filtros e listas
+  const allCats=[...new Set([...DEFAULT_CATS,...items.map(i=>i.categoria).filter(Boolean)])];
+  const fc=$("fCat").value;
+  $("fCat").innerHTML='<option value="">Todas categorias</option>'+allCats.map(c=>`<option ${c===fc?"selected":""}>${esc(c)}</option>`).join("");
+  $("descList").innerHTML=[...new Set(items.map(i=>i.descricao).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join("");
+
+  const fs=$("fSt").value;
+  const rows=month.filter(i=>(!fc||i.categoria===fc)&&(!fs||(fs==="pendente"?i.status==="pendente":i.status!=="pendente")))
+    .sort((a,b)=>(b.data||"").localeCompare(a.data||"")||(b.criadoEm||0)-(a.criadoEm||0));
+  $("emptyList").style.display=rows.length?"none":"block";
+  $("list").innerHTML=rows.map(i=>{
+    const [y,m,d]=(i.data||"").split("-");
+    const st=i.status==="pendente"?"pendente":"pago";
+    const act=confirmId===i.id
+      ?`<button data-del="${i.id}" style="color:var(--red)">Excluir?</button> <button data-nodel>Não</button>`
+      :`<button data-edit="${i.id}">Editar</button> <button data-ask="${i.id}">✕</button>`;
+    return `<tr>
+      <td class="d-date">${d}/${m}</td>
+      <td class="d-desc">${esc(i.descricao)}${i.mesRef?`<span class="ref">ref. ${esc(mesLabel(i.mesRef))}</span>`:""}<div class="cat">${esc(i.categoria)}${i.obs?" · "+esc(i.obs):""}${i.comprovante?`<a class="clip" href="${esc(i.comprovante)}" target="_blank" rel="noopener">📎 comprovante</a>`:""}</div></td>
+      <td class="d-by">${esc(i.pagoPor||"")}</td>
+      <td class="d-st"><button class="pill ${st}" data-toggle="${i.id}" title="${st==="pago"?"Clique para voltar para A pagar":"Clique para dar baixa"}">${st==="pago"?"Pago":"A pagar"}</button></td>
+      <td class="num d-val">${brl(+i.valor)}</td>
+      <td class="actions">${act}</td></tr>`}).join("");
+}
+
+function catOptions(){return [...new Set([...DEFAULT_CATS,...items.map(i=>i.categoria).filter(Boolean)])]}
+function byOptions(){return [...new Set([...DEFAULT_BY,...items.map(i=>i.pagoPor).filter(Boolean)])]}
+function fillPick(sel,inp,opts,val,emptyLabel){
+  if(val&&!opts.includes(val))opts=[...opts,val];
+  $(sel).innerHTML=(emptyLabel?`<option value="">${emptyLabel}</option>`:`<option value="" disabled ${val?"":"selected"}>Selecione…</option>`)
+    +opts.map(o=>`<option ${o===val?"selected":""}>${esc(o)}</option>`).join("")
+    +`<option value="${NEW}">+ Adicionar nova…</option>`;
+  $(inp).value="";$(inp).style.display="none";$(inp).required=false;
+}
+function readPick(sel,inp){return $(sel).value===NEW?$(inp).value.trim():$(sel).value}
+$("sCat").addEventListener("change",updMes);$("nCat").addEventListener("input",updMes);
+$("iFile").addEventListener("change",()=>{if($("iFile").files[0])$("iSt").value="pago"});
+document.querySelectorAll("select.pick").forEach(s=>s.addEventListener("change",()=>{
+  const inp=$(s.dataset.new),on=s.value===NEW;inp.style.display=on?"block":"none";inp.required=on;if(on)inp.focus();
+}));
+function openForm(item){
+  editingId=item?.id||null;
+  $("formTitle").textContent=item?"Editar custo":"Novo custo";
+  $("iDesc").value=item?.descricao||"";
+  $("iVal").value=item?String(item.valor).replace(".",","):"";
+  const def=ym(cur)===ym(new Date())?hoje():ym(cur)+"-01";
+  $("iDate").value=item?.data||def;
+  fillPick("sCat","nCat",catOptions(),item?.categoria||"");
+  fillPick("sBy","nBy",byOptions(),item?.pagoPor||"","(não informar)");
+  $("iSt").value=item?.status||"pago";
+  $("iObs").value=item?.obs||"";
+  {const pm=new Date();pm.setDate(1);pm.setMonth(pm.getMonth()-1);$("iMes").value=item?.mesRef||ym(pm);}
+  $("iFile").value="";$("fileHint").innerHTML=item?.comprovante?`Já tem comprovante: <a class="clip" href="${esc(item.comprovante)}" target="_blank" rel="noopener">ver</a> · anexar outro substitui`:"";
+  updMes();
+  $("fErr").textContent="";
+  $("ov").classList.add("open");
+  setTimeout(()=>(item?$("iDesc"):$("sCat")).focus(),50);
+}
+function closeForm(){$("ov").classList.remove("open");editingId=null}
+
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const valor=parseVal($("iVal").value);
+  if(!(valor>0)){$("fErr").textContent="Informe um valor válido.";return}
+  if(!readPick("sCat","nCat")){$("fErr").textContent="Escolha uma categoria.";return}
+  const old=editingId?items.find(i=>i.id===editingId):null;
+  const doc={descricao:$("iDesc").value.trim(),valor,data:$("iDate").value,categoria:readPick("sCat","nCat")||"Outros",
+    pagoPor:readPick("sBy","nBy"),status:$("iSt").value,obs:$("iObs").value.trim(),criadoEm:old?.criadoEm||Date.now(),
+    mesRef:precisaMes(readPick("sCat","nCat"))?$("iMes").value:"",comprovante:old?.comprovante||""};
+  const file=$("iFile").files[0];
+  if(file&&file.size>15*1024*1024){$("fErr").textContent="Arquivo muito grande (máx. 15 MB).";return}
+  const id=editingId||("c"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+  $("save").disabled=true;
+  try{await api("save",{item:{id,...doc}});
+    if(file){$("save").textContent="Enviando comprovante…";await uploadComprovante(id,file)}
+    const [y,m]=doc.data.split("-");cur=new Date(+y,+m-1,1);closeForm();await load()}
+  catch(err){$("fErr").textContent="Não foi possível salvar: "+err.message}
+  finally{$("save").disabled=false;$("save").textContent="Salvar"}
+});
+
+// ---- comprovantes ----
+function lerArquivo(file){
+  return new Promise((res,rej)=>{
+    const fin=(blob,nome)=>{const r=new FileReader();r.onload=()=>res({base64:String(r.result).split(",")[1],mime:blob.type||file.type||"application/octet-stream",nome});r.onerror=()=>rej(new Error("Não foi possível ler o arquivo."));r.readAsDataURL(blob)};
+    if(!/^image\//.test(file.type)||file.size<800*1024)return fin(file,file.name);
+    const img=new Image(),u=URL.createObjectURL(file);
+    img.onload=()=>{const k=Math.min(1,1800/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      c.toBlob(b=>fin(b||file,file.name.replace(/\.[^.]+$/,"")+".jpg"),"image/jpeg",0.82)};
+    img.onerror=()=>{URL.revokeObjectURL(u);fin(file,file.name)};img.src=u;
+  });
+}
+async function uploadComprovante(id,file){
+  const f=await lerArquivo(file);
+  const body=JSON.stringify({action:"upload",id,...f});
+  try{
+    const r=await fetch(API_URL,{method:"POST",body});
+    const j=await r.json();if(!j.ok)throw new Error(j.error||"Falha no envio.");return j;
+  }catch(e){
+    if(e instanceof TypeError){await fetch(API_URL,{method:"POST",mode:"no-cors",body});return {ok:true}}
+    throw e;
+  }
+}
+let baixaId=null;
+function abrirBaixa(it){baixaId=it.id;$("bInfo").textContent=it.descricao+" · "+brl(+it.valor);$("bFile").value="";$("bErr").textContent="";$("ovBaixa").classList.add("open")}
+function fecharBaixa(){$("ovBaixa").classList.remove("open");baixaId=null}
+$("bCancel").onclick=fecharBaixa;
+$("ovBaixa").addEventListener("click",e=>{if(e.target===$("ovBaixa"))fecharBaixa()});
+$("formBaixa").addEventListener("submit",async e=>{
+  e.preventDefault();const it=items.find(i=>i.id===baixaId);if(!it)return fecharBaixa();
+  const file=$("bFile").files[0];
+  if(file&&file.size>15*1024*1024){$("bErr").textContent="Arquivo muito grande (máx. 15 MB).";return}
+  $("bSave").disabled=true;
+  try{
+    await api("save",{item:{...it,status:"pago"}});
+    if(file){$("bSave").textContent="Enviando comprovante…";await uploadComprovante(it.id,file)}
+    fecharBaixa();await load();
+  }catch(err){$("bErr").textContent="Não foi possível dar baixa: "+err.message}
+  finally{$("bSave").disabled=false;$("bSave").textContent="Marcar como pago"}
+});
+$("cancel").onclick=closeForm;
+$("ov").addEventListener("click",e=>{if(e.target===$("ov"))closeForm()});
+$("addTop").onclick=()=>openForm();$("addFab").onclick=()=>openForm();
+$("prev").onclick=()=>{cur.setMonth(cur.getMonth()-1);confirmId=null;render()};
+$("next").onclick=()=>{cur.setMonth(cur.getMonth()+1);confirmId=null;render()};
+$("fCat").onchange=render;$("fSt").onchange=render;
+
+$("list").addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.edit){openForm(items.find(i=>i.id===b.dataset.edit))}
+  else if(b.dataset.ask){confirmId=b.dataset.ask;render()}
+  else if(b.hasAttribute("data-nodel")){confirmId=null;render()}
+  else if(b.dataset.del){b.disabled=true;try{await api("delete",{id:b.dataset.del})}catch(err){showBanner("Não foi possível excluir: "+err.message)}confirmId=null;await load()}
+  else if(b.dataset.toggle){const it=items.find(i=>i.id===b.dataset.toggle);if(!it)return;
+    if(it.status==="pendente"){abrirBaixa(it);return}
+    b.disabled=true;
+    try{await api("save",{item:{...it,status:it.status==="pendente"?"pago":"pendente"}})}catch(err){showBanner("Não foi possível alterar o status: "+err.message)}await load()}
+});
+
+$("copyCsv").onclick=async()=>{
+  const key=ym(cur);const rows=items.filter(i=>(i.data||"").startsWith(key)).sort((a,b)=>a.data.localeCompare(b.data));
+  const txt=["Data\tDescrição\tCategoria\tMês ref.\tPago por\tStatus\tValor\tObservação\tComprovante",...rows.map(i=>[i.data.split("-").reverse().join("/"),i.descricao,i.categoria,mesLabel(i.mesRef),i.pagoPor||"",i.status==="pendente"?"A pagar":"Pago",String(i.valor).replace(".",","),i.obs||"",i.comprovante||""].join("\t"))].join("\n");
+  try{await navigator.clipboard.writeText(txt);$("copyCsv").textContent="Copiado ✓"}catch(e){$("copyCsv").textContent="Não foi possível copiar"}
+  setTimeout(()=>$("copyCsv").textContent="Copiar planilha",1800);
+};
+
+function showBanner(t){$("banner").textContent=t;$("banner").style.display=t?"block":"none"}
+
+function normData(d){
+  d=String(d||"");
+  if(!d||/^\d{4}-\d{2}(-\d{2})?$/.test(d))return d;
+  const x=new Date(d);if(isNaN(x))return d;
+  return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
+}
+async function load(){
+  try{
+    const r=await api("list");
+    items=(r.items||[]).map(i=>({...i,valor:+i.valor,data:normData(i.data),mesRef:normData(i.mesRef).slice(0,7)}));
+    $("status").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" · "+items.length+" lançamento(s) no total";
+    showBanner("");render();return true;
+  }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
+}
+render();
+load();
+setInterval(()=>{if(!$("ov").classList.contains("open"))load()},60000);
+</script>
+</body>
+</html>
