@@ -1,5 +1,5 @@
 // Ponte entre o site e o Google Apps Script (evita bloqueios do navegador, ex.: iPhone/Safari)
-const API_URL = "https://script.google.com/macros/s/AKfycbzdVqdYAElufIOZppKk7nyDx8qczvp8rm7vbqww6yp3BsC_ubpK58oGalvl67h1E1EnpQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
