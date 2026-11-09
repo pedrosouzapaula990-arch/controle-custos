@@ -219,7 +219,24 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 const API_URL = "https://script.google.com/macros/s/AKfycbzdVqdYAElufIOZppKk7nyDx8qczvp8rm7vbqww6yp3BsC_ubpK58oGalvl67h1E1EnpQ/exec";
 // =====================================================================
 let jsonpN=0;
-function api(action, payload){
+async function api(action, payload){
+  // 1º: via Netlify (/api), que funciona em qualquer navegador
+  let r=null;
+  try{r=await fetch("/api",{method:"POST",body:JSON.stringify({action,...(payload||{})})})}catch(e){r=null}
+  if(r&&r.status!==404&&r.status!==405&&(r.headers.get("content-type")||"").includes("json")){
+    const j=await r.json();
+    if(j.ok)return j;
+    throw new Error(j.error||"Resposta inválida da API.");
+  }
+  if(action==="upload")return uploadDireto(payload);
+  return apiJsonp(action,payload);
+}
+async function uploadDireto(payload){
+  const body=JSON.stringify({action:"upload",...payload});
+  try{const r=await fetch(API_URL,{method:"POST",body});const j=await r.json();if(!j.ok)throw new Error(j.error||"Falha no envio.");return j}
+  catch(e){if(e instanceof TypeError){await fetch(API_URL,{method:"POST",mode:"no-cors",body});return {ok:true}}throw e}
+}
+function apiJsonp(action, payload){
   return new Promise((resolve,reject)=>{
     const cb="__cb"+(++jsonpN)+"_"+Date.now();
     const params=new URLSearchParams({action,callback:cb});
@@ -415,14 +432,8 @@ function lerArquivo(file){
 }
 async function uploadComprovante(id,file){
   const f=await lerArquivo(file);
-  const body=JSON.stringify({action:"upload",id,...f});
-  try{
-    const r=await fetch(API_URL,{method:"POST",body});
-    const j=await r.json();if(!j.ok)throw new Error(j.error||"Falha no envio.");return j;
-  }catch(e){
-    if(e instanceof TypeError){await fetch(API_URL,{method:"POST",mode:"no-cors",body});return {ok:true}}
-    throw e;
-  }
+  if(f.base64.length>5.5*1024*1024)throw new Error("Arquivo muito grande. Envie um PDF de até 4 MB ou uma foto.");
+  return api("upload",{id,...f});
 }
 let baixaId=null;
 function abrirBaixa(it){baixaId=it.id;$("bInfo").textContent=it.descricao+" · "+brl(+it.valor);$("bFile").value="";$("bErr").textContent="";$("ovBaixa").classList.add("open")}
