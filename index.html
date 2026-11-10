@@ -596,7 +596,20 @@ async function load(){
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
 }
 // ================== SUPORTE ==================
-const SUP_DEF={disparos:["07:00 – Vence hoje","10:15 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Kaique","Lígia"]};
+const SUP_DEF={disparos:["07:00 – Vence hoje","10:15 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Turno manhã (9h–16:40)","Turno noite (16:40–23:30)"]};
+const TURNOS=[{ini:9*60,fim:16*60+40,chave:"manh"},{ini:16*60+40,fim:23*60+30,chave:"noite"}];
+function minAgora(){const a=new Date();return a.getHours()*60+a.getMinutes()}
+function hm2min(h){const [a,b]=String(h).split(":").map(Number);return a*60+(b||0)}
+function turnoDe(min){return TURNOS.find(t=>min>=t.ini&&min<t.fim)||null}
+// alerta de reporte: dentro do turno, mais de 1h (+10 min de tolerância) sem reporte
+function semReporte(dia){
+  if(supDia!==hoje())return null;
+  const agora=minAgora(),t=turnoDe(agora);if(!t)return null;
+  const noTurno=dia.map(i=>hm2min(i.hora)).filter(m=>m>=t.ini&&m<=agora);
+  if(!noTurno.length)return agora-t.ini>15?agora-t.ini:null;
+  const gap=agora-Math.max(...noTurno);
+  return gap>70?gap:null;
+}
 // horário no início do nome do disparo (ex.: "07:00 – ..." ou "07h – ...")
 function horaDisparo(n){const m=String(n).match(/^(\d{1,2})(?:[:h](\d{2}))?/);return m?(+m[1])*60+(+(m[2]||0)):null}
 // atrasado = dia de hoje, passou 15 min do horário e ainda está aguardando
@@ -641,8 +654,10 @@ function renderSup(){
   const fmax=dia.length?Math.max(...dia.map(i=>i.fila)):0;$("sFilaN").textContent=dia.length?"Pico do dia: "+fmax:"";
   const nomesAl=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
   const probs=nomesAl.map(n=>({nome:n,status:ult?.disp.find(x=>x.nome===n)?.status||"aguardando"})).filter(d=>d.status==="problema"||atrasado(d.nome,d.status));
-  $("sAlert").textContent=(ult||probs.length)?probs.length:"—";$("sAlert").className="val"+(probs.length?" up":"");
-  $("sAlertN").textContent=probs.length?probs.map(d=>curto(d.nome)+(d.status==="problema"?"":" atrasado")).join(", "):(ult?"Tudo certo":"");
+  const sr=semReporte(dia);
+  const nAl=probs.length+(sr!=null?1:0);
+  $("sAlert").textContent=(ult||nAl)?nAl:"—";$("sAlert").className="val"+(nAl?" up":"");
+  $("sAlertN").textContent=nAl?[...(sr!=null?[dia.length?`Sem reporte há ${sr} min`:"Nenhum reporte no turno ainda"]:[]),...probs.map(d=>curto(d.nome)+(d.status==="problema"?"":" atrasado"))].join(", "):(ult?"Tudo certo":"");
   const nomes=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
   $("supDisp").innerHTML=nomes.length?`<table class="dtab">${nomes.map(n=>{const d=ult?.disp.find(x=>x.nome===n);const st=d?.status||"aguardando";const at=atrasado(n,st);
     return `<tr><td>${esc(n)}</td><td><span class="chip ${at?"problema":st}">${at?"⚠️ Atrasado":ST[st].e+" "+ST[st].t}</span></td><td class="num">${d&&d.qtd!==""&&d.qtd!=null?(+d.qtd).toLocaleString("pt-BR"):""}</td></tr>`}).join("")}</table>`:'<div class="empty">Nenhum disparo cadastrado.</div>';
@@ -673,7 +688,9 @@ function abrirSup(item){
   $("rData").value=item?.data||supDia;
   $("rHora").value=item?.hora||(String(agora.getHours()).padStart(2,"0")+":00");
   const anterior=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)).pop();
-  fillPick("sResp","nResp",supResp(),item?.responsavel||anterior?.responsavel||"");
+  let sug=item?.responsavel||"";
+  if(!sug){const t=turnoDe(minAgora());const r=t&&supResp().find(x=>x.toLowerCase().includes(t.chave));sug=r||anterior?.responsavel||""}
+  fillPick("sResp","nResp",supResp(),sug);
   renderSupRows(item?item.disp:(anterior?anterior.disp:[]));
   $("rFila").value=item?item.fila:"";
   $("rObs").value=item?.obs||"";$("rErr").textContent="";
