@@ -1,7 +1,7 @@
 // Ponte do site do SUPORTE com o Apps Script. Só acessa a aba "Suporte" (sem acesso aos custos).
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
-const ACOES = ["list", "save", "delete"];
-const TIPOS_GRAVAVEIS = ["hora", "check"];
+const ACOES = ["list", "save", "delete", "validar"];
+const TIPOS_GRAVAVEIS = ["hora", "check", "valid"];
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -14,9 +14,9 @@ export default async (req) => {
   body.aba = "Suporte"; // sempre a aba do suporte
   if (body.action === "save") {
     const it = body.item || {};
-    if (!TIPOS_GRAVAVEIS.includes(it.tipo) || String(it.id || "").startsWith("__")) return json({ ok: false, error: "não permitido" }, 403);
+    if (!TIPOS_GRAVAVEIS.includes(it.tipo) || !/^(r|ck-|v-)/.test(String(it.id || ""))) return json({ ok: false, error: "não permitido" }, 403);
   }
-  if (body.action === "delete" && String(body.id || "").startsWith("__")) return json({ ok: false, error: "não permitido" }, 403);
+  if (body.action === "delete" && (String(body.id || "").startsWith("__") || !/^(r|ck-|v-)/.test(String(body.id || "")))) return json({ ok: false, error: "não permitido" }, 403);
   try {
     const r = await fetch(API_URL, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify(body), redirect: "follow" });
     const txt = await r.text();

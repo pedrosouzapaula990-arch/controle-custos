@@ -121,6 +121,10 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 .dtab{width:100%}
 .dtab td{padding:8px 4px;font-size:14px}
 @media(max-width:640px){.dtab tr{display:table-row}.dtab td{display:table-cell;border-bottom:1px solid var(--line);padding:8px 4px}}
+.vrow{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.vrow:last-child{border-bottom:0}
+.vrow .hint{margin-top:2px}
+@media(max-width:640px){.vrow{grid-template-columns:1fr}}
 .ckrow{display:grid;grid-template-columns:30px 48px 1fr auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
 .ckrow:last-child{border-bottom:0}
 .ckh{font-weight:700;font-variant-numeric:tabular-nums}
@@ -202,13 +206,43 @@ body.pg-suporte #addFab{display:none!important}
     <div class="subtabs">
       <button data-ssub="check" class="on">Checklist do dia</button>
       <button data-ssub="hora">Hora a hora</button>
-      <button disabled>Validação diária · em breve</button>
-      <button disabled>Crédito · em breve</button>
+      <button data-ssub="valid">Validação</button>
+      <button data-ssub="cred">Crédito</button>
     </div>
     <div id="sSubCheck">
       <div class="hint" style="margin-bottom:10px">O suporte marca as tarefas no site dele. <button type="button" class="linkbtn" data-lista="tarefas">Editar tarefas</button></div>
       <div class="grid2" id="ckTurnos"></div>
     </div>
+    <div id="sSubValid" hidden>
+      <div class="card" style="margin-bottom:12px">
+        <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Bases</h2><div><a id="vLink" class="linkbtn" target="_blank" rel="noopener" href="#" style="margin-right:10px">Abrir planilha das bases</a><button id="vAtual">↻ Recalcular</button></div></div>
+        <div id="vBases"></div>
+      </div>
+      <div class="kpis">
+        <div class="card kpi"><div class="lbl">Erros pendentes</div><div class="val" id="vErr">—</div><div class="note">o suporte precisa corrigir</div></div>
+        <div class="card kpi"><div class="lbl">Alertas pendentes</div><div class="val" id="vAl">—</div><div class="note">o suporte precisa conferir</div></div>
+        <div class="card kpi"><div class="lbl">Tratados</div><div class="val" id="vTrat">—</div><div class="note" id="vTotN"></div></div>
+        <div class="card kpi"><div class="lbl">Erros de vendedor</div><div class="val" id="vVend">—</div><div class="note">apontados pelo suporte</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Erros por vendedor</h2><div id="vPorVend"></div></div>
+        <div class="card"><h2>Como ler</h2><div class="hint" style="line-height:1.6"><b>Erro</b>: dado faltando ou inválido na base (servidor, plano, telas, vendedor, vencimento).<br><b>Alerta</b>: precisa conferir — vencimento fora do plano, venda e renovação no mesmo mês, mais servidores que telas.<br>O suporte marca cada ponto como corrigido, conferido ou erro do vendedor.</div></div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <h2 style="margin:0">Pontos da validação (mês atual)</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="fvSt"><option value="pend">Pendentes</option><option value="trat">Tratados</option><option value="">Todos</option></select>
+            <select id="fvNv"><option value="">Erros e alertas</option><option value="erro">Só erros</option><option value="alerta">Só alertas</option></select>
+            <select id="fvTp"><option value="">Todos os tipos</option></select>
+            <select id="fvVend"><option value="">Todos os vendedores</option></select>
+            <select id="fvBase"><option value="">As duas bases</option><option>Base Darb Oficial</option><option>Base Motiva</option></select>
+          </div>
+        </div>
+        <div id="vList"><div class="empty">Carregando…</div></div>
+      </div>
+    </div>
+    <div id="sSubCred" hidden><div id="crBox"><div class="empty">Carregando…</div></div></div>
     <div id="sSubHora" hidden>
     <div class="kpis">
       <div class="card kpi"><div class="lbl">Último reporte</div><div class="val" id="sUlt">—</div><div class="note" id="sUltN"></div></div>
@@ -232,6 +266,22 @@ body.pg-suporte #addFab{display:none!important}
 
 <button class="primary fab" id="addFab">+ Novo custo</button>
 <button class="primary fab" id="supFab">+ Novo reporte</button>
+
+<div class="overlay" id="ovCr">
+  <form class="modal" id="formCr">
+    <h3>Registrar créditos</h3>
+    <div class="field"><label for="crTipo">Tipo</label>
+      <select id="crTipo"><option value="recarga">Recarga (créditos comprados)</option><option value="saldo">Saldo atual no início do dia</option></select></div>
+    <div class="row2">
+      <div class="field"><label for="crData">Data</label><input id="crData" type="date" required></div>
+      <div class="field"><label for="crQt">Créditos</label><input id="crQt" type="number" min="0" inputmode="numeric" required></div>
+    </div>
+    <div class="field"><label for="crObs">Observação (opcional)</label><input id="crObs" placeholder="Ex.: painel Hplus"></div>
+    <div class="hint" id="crHint">Para o saldo ficar certo, registre uma vez o <b>saldo atual</b> (o que aparece no painel no início do dia). Depois registre só as recargas.</div>
+    <div class="err" id="crErr"></div>
+    <div class="mfoot"><button type="button" id="crCancel">Cancelar</button><button type="submit" class="primary" id="crSave">Salvar</button></div>
+  </form>
+</div>
 
 <div class="overlay" id="ovSup">
   <form class="modal" id="formSup">
@@ -313,7 +363,7 @@ body.pg-suporte #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794335188"></script>
+<script src="suporte/sup-core.js?v=1794336947"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -636,7 +686,7 @@ function atrasado(nome,st){
   const a=new Date();return a.getHours()*60+a.getMinutes()>h+15;
 }
 const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
-let supChecks=[],supSub="check",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
+let supMarks=[],supRecargas=[],valRes=null,valCarregando=false,supChecks=[],supSub="check",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
 let supDia=hoje();
 function supCfgAtual(){return {...(supCfg||{}),disparos:[...supDisparos()],resp:[...supResp()],tarefas:[...SupCore.tarefas(supCfg)]}}
 function supDisparos(){const l=[...(supCfg?.disparos||SUP_DEF.disparos)];return l.sort((a,b)=>(horaDisparo(a)??9999)-(horaDisparo(b)??9999))}
@@ -657,6 +707,8 @@ async function loadSup(){
     const cfg=all.find(i=>i.id==="__config__");
     if(cfg){try{const c=JSON.parse(cfg.dados);if(c&&typeof c==="object")supCfg=c}catch(e){}}
     supChecks=all.filter(i=>i.tipo==="check").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
+    supMarks=all.filter(i=>i.tipo==="valid").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
+    supRecargas=all.filter(i=>i.tipo==="recarga").map(i=>({...i,data:normData(i.data)}));
     supItems=all.filter(i=>i.id!=="__config__"&&i.tipo==="hora").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5),fila:+i.fila||0,total:+i.total||0,criadoEm:+i.criadoEm||0,disp:parseDados(i)}));
     $("supStatus").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     showSupBanner("");renderSup();
@@ -664,7 +716,9 @@ async function loadSup(){
 }
 function renderSup(){
   $("sDate").value=supDia;
-  $("sSubCheck").hidden=supSub!=="check";$("sSubHora").hidden=supSub!=="hora";
+  $("sSubCheck").hidden=supSub!=="check";$("sSubHora").hidden=supSub!=="hora";$("sSubValid").hidden=supSub!=="valid";$("sSubCred").hidden=supSub!=="cred";
+  if(supSub==="valid")renderValid();
+  if(supSub==="cred")$("crBox").innerHTML=SupCore.htmlCredito(valRes,supRecargas,true);
   document.querySelectorAll("[data-ssub]").forEach(b=>b.classList.toggle("on",b.dataset.ssub===supSub));
   $("ckTurnos").innerHTML=SupCore.htmlChecklist(supCfg,supChecks,supDia,false,supItems);
   SupCore.renderHora($,supCfg,supItems,supDia,{confirm:supConfirm,acoes:true,checks:supChecks});
@@ -733,7 +787,46 @@ $("ovSup").addEventListener("click",e=>{if(e.target===$("ovSup"))fecharSup()});
 $("supAdd").onclick=()=>abrirSup();$("supFab").onclick=()=>abrirSup();
 $("sDate").onchange=()=>{if($("sDate").value){supDia=$("sDate").value;supConfirm=null;renderSup()}};
 function mudaDia(n){const [y,m,d]=supDia.split("-").map(Number);const x=new Date(y,m-1,d+n);supDia=ym(x)+"-"+String(x.getDate()).padStart(2,"0");supConfirm=null;renderSup()}
-document.querySelectorAll("[data-ssub]").forEach(b=>b.onclick=()=>{supSub=b.dataset.ssub;renderSup()});
+document.querySelectorAll("[data-ssub]").forEach(b=>b.onclick=()=>{supSub=b.dataset.ssub;renderSup();if((supSub==="valid"||supSub==="cred")&&!valRes)loadVal(false)});
+// ---- validação / crédito (visão do dono) ----
+async function loadVal(forcar){
+  if(valCarregando||!supPronto)return;valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
+  try{const r=await api("validar",{aba:"Suporte",desde:SupCore.infoSaldo(supRecargas).desde||"",forcar:!!forcar});
+    if(!r.consumo)throw new Error("Atualize o Apps Script com o código novo (Code.gs).");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("")}
+  catch(e){showSupBanner("Erro ao calcular a validação: "+e.message)}
+  finally{valCarregando=false;$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular";renderSup()}
+}
+function renderValid(){
+  $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);if(!valRes)return;
+  const k=SupCore.kpisValidacao(valRes,supMarks);
+  $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="de "+k.total+" pontos";$("vVend").textContent=k.vendErros;
+  $("vPorVend").innerHTML=SupCore.htmlPorVendedor(valRes,supMarks);
+  const opt=(id,vals,todos)=>{const cur=$(id).value;$(id).innerHTML=`<option value="">${todos}</option>`+vals.map(t=>`<option ${t===cur?"selected":""}>${esc(t)}</option>`).join("")};
+  opt("fvTp",[...new Set(valRes.erros.map(e=>e.tipo))].sort(),"Todos os tipos");
+  opt("fvVend",[...new Set(valRes.erros.map(e=>e.vendedor||"(sem vendedor)"))].sort(),"Todos os vendedores");
+  const lista=SupCore.filtrarErros(valRes,supMarks,{status:$("fvSt").value,nivel:$("fvNv").value,tipo:$("fvTp").value,vendedor:$("fvVend").value,base:$("fvBase").value});
+  $("vList").innerHTML=SupCore.htmlListaValidacao(lista,false);
+}
+["fvSt","fvNv","fvTp","fvVend","fvBase"].forEach(id=>$(id).onchange=renderValid);
+$("vAtual").onclick=()=>loadVal(true);
+$("crBox").addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.id==="crAdd"){$("crTipo").value=SupCore.infoSaldo(supRecargas).ultSaldo?"recarga":"saldo";$("crData").value=hoje();$("crQt").value="";$("crObs").value="";$("crErr").textContent="";$("ovCr").classList.add("open");return}
+  if(b.dataset.crdel){
+    if(b.dataset.conf!=="1"){b.dataset.conf="1";b.textContent="Excluir?";return}
+    b.disabled=true;try{await api("delete",{aba:"Suporte",id:b.dataset.crdel});await loadSup();valRes=null;await loadVal(false)}catch(err){showSupBanner(err.message)}
+  }
+});
+$("formCr").addEventListener("submit",async e=>{
+  e.preventDefault();$("crSave").disabled=true;
+  try{
+    await api("save",{aba:"Suporte",item:{id:"cr-"+Date.now().toString(36),tipo:"recarga",data:$("crData").value,hora:"",responsavel:"",fila:0,total:+$("crQt").value||0,status:$("crTipo").value,dados:"",obs:$("crObs").value.trim(),criadoEm:Date.now()}});
+    $("ovCr").classList.remove("open");await loadSup();valRes=null;await loadVal(false);
+  }catch(err){$("crErr").textContent="Não foi possível salvar: "+err.message}
+  finally{$("crSave").disabled=false}
+});
+$("crCancel").onclick=()=>$("ovCr").classList.remove("open");
+$("ovCr").addEventListener("click",e=>{if(e.target===$("ovCr"))$("ovCr").classList.remove("open")});
 $("dPrev").onclick=()=>mudaDia(-1);$("dNext").onclick=()=>mudaDia(1);
 $("supList").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
@@ -759,7 +852,7 @@ render();
 load();
 rota();
 setInterval(()=>{
-  const aberto=["ov","ovSup","ovLista","ovBaixa"].some(id=>$(id).classList.contains("open"));
+  const aberto=["ov","ovSup","ovLista","ovBaixa","ovCr"].some(id=>$(id).classList.contains("open"));
   if(aberto)return;
   if(pagina==="suporte")loadSup();else load();
 },60000);
