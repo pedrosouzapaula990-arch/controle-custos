@@ -288,7 +288,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794338002"></script>
+<script src="sup-core.js?v=1794338508"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -305,15 +305,24 @@ async function loadSup(){
     checks=all.filter(i=>i.tipo==="check").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
     marks=all.filter(i=>i.tipo==="valid").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
     recargas=all.filter(i=>i.tipo==="recarga").map(i=>({...i,data:normData(i.data)}));
+    supCarregado=true;
     $("supStatus").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     showSupBanner("");render();
   }catch(e){showSupBanner("Erro ao carregar: "+e.message)}
 }
-async function loadVal(forcar){
-  if(valCarregando)return;valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
-  try{valRes=await api("validar",{desde:SupCore.infoSaldo(recargas).desde||"",forcar:!!forcar});if(valRes.basesUrl)$("vLink").href=valRes.basesUrl;showSupBanner("")}
-  catch(e){showSupBanner("Erro ao calcular a validação: "+e.message)}
-  finally{valCarregando=false;$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular";render()}
+let supCarregado=false;
+async function loadVal(forcar,tent){
+  tent=tent||0;
+  if(valCarregando)return;
+  if(!supCarregado){setTimeout(()=>loadVal(forcar,tent),1500);return}
+  valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
+  let retry=false;
+  try{const r=await api("validar",{desde:SupCore.infoSaldo(recargas).desde||"",forcar:!!forcar&&tent===0});
+    if(!r.consumo)throw new Error("Resposta incompleta do servidor.");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("")}
+  catch(e){
+    if(tent<4){retry=true;showSupBanner("Lendo as bases (são muitas linhas, pode levar até 1 minuto)…")}
+    else showSupBanner("Erro ao calcular a validação: "+e.message)}
+  finally{valCarregando=false;if(retry)setTimeout(()=>loadVal(false,tent+1),8000);else{$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular"}render()}
 }
 function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);

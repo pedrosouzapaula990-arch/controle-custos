@@ -163,7 +163,7 @@ function validar_(p) {
   const hoje = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
   const cache = CacheService.getScriptCache();
   const chave = "validar-" + hoje + "-" + (p.desde || "") + "-" + versaoBases_();
-  const emCache = cache.get(chave);
+  const emCache = cacheGet_(cache, chave);
   if (emCache && !p.forcar) return JSON.parse(emCache);
   const ss = basesSS_();
   const bases = BASES.map(nome => {
@@ -180,8 +180,27 @@ function validar_(p) {
   });
   const out = calcularValidacao(bases, hoje, p.desde || "");
   out.ok = true; out.aba = "Suporte"; out.basesUrl = ss.getUrl();
-  try { cache.put(chave, JSON.stringify(out), 300); } catch (e) {}
+  cachePut_(cache, chave, JSON.stringify(out), 600);
   return out;
+}
+// CacheService aceita até 100 KB por chave: guarda em pedaços
+function cachePut_(cache, chave, txt, seg) {
+  try {
+    const partes = [], T = 90000;
+    for (let i = 0; i < txt.length; i += T) partes.push(txt.slice(i, i + T));
+    const obj = { [chave + "-n"]: String(partes.length) };
+    partes.forEach((pt, i) => obj[chave + "-" + i] = pt);
+    cache.putAll(obj, seg);
+  } catch (e) {}
+}
+function cacheGet_(cache, chave) {
+  try {
+    const n = +cache.get(chave + "-n"); if (!n) return null;
+    const ks = []; for (let i = 0; i < n; i++) ks.push(chave + "-" + i);
+    const got = cache.getAll(ks); let txt = "";
+    for (const k of ks) { if (got[k] == null) return null; txt += got[k]; }
+    return txt;
+  } catch (e) { return null; }
 }
 // muda quando o conteúdo das bases muda (nº de linhas + última célula)
 function versaoBases_() {

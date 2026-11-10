@@ -363,7 +363,7 @@ body.pg-suporte #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794338002"></script>
+<script src="suporte/sup-core.js?v=1794338508"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -789,12 +789,18 @@ $("sDate").onchange=()=>{if($("sDate").value){supDia=$("sDate").value;supConfirm
 function mudaDia(n){const [y,m,d]=supDia.split("-").map(Number);const x=new Date(y,m-1,d+n);supDia=ym(x)+"-"+String(x.getDate()).padStart(2,"0");supConfirm=null;renderSup()}
 document.querySelectorAll("[data-ssub]").forEach(b=>b.onclick=()=>{supSub=b.dataset.ssub;renderSup();if((supSub==="valid"||supSub==="cred")&&!valRes)loadVal(false)});
 // ---- validação / crédito (visão do dono) ----
-async function loadVal(forcar){
-  if(valCarregando||!supPronto)return;valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
-  try{const r=await api("validar",{aba:"Suporte",desde:SupCore.infoSaldo(supRecargas).desde||"",forcar:!!forcar});
+async function loadVal(forcar,tent){
+  tent=tent||0;
+  if(valCarregando)return;
+  if(!supPronto){setTimeout(()=>loadVal(forcar,tent),1500);return}
+  valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
+  let retry=false;
+  try{const r=await api("validar",{aba:"Suporte",desde:SupCore.infoSaldo(supRecargas).desde||"",forcar:!!forcar&&tent===0});
     if(!r.consumo)throw new Error("Atualize o Apps Script com o código novo (Code.gs).");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("")}
-  catch(e){showSupBanner("Erro ao calcular a validação: "+e.message)}
-  finally{valCarregando=false;$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular";renderSup()}
+  catch(e){
+    if(tent<4&&!/Atualize/.test(e.message)){retry=true;showSupBanner("Lendo as bases (são muitas linhas, pode levar até 1 minuto)…")}
+    else showSupBanner("Erro ao calcular a validação: "+e.message)}
+  finally{valCarregando=false;if(retry)setTimeout(()=>loadVal(false,tent+1),8000);else{$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular"}renderSup()}
 }
 function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);if(!valRes)return;
