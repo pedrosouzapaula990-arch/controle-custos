@@ -121,6 +121,14 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 .dtab{width:100%}
 .dtab td{padding:8px 4px;font-size:14px}
 @media(max-width:640px){.dtab tr{display:table-row}.dtab td{display:table-cell;border-bottom:1px solid var(--line);padding:8px 4px}}
+.ckrow{display:grid;grid-template-columns:30px 48px 1fr auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ckrow:last-child{border-bottom:0}
+.ckh{font-weight:700;font-variant-numeric:tabular-nums}
+.ckbtn{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:15px}
+.ckbtn.on{background:var(--accent);border-color:var(--accent)}
+.prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:4px}
+.prog div{height:100%;background:var(--accent)}
+@media(max-width:640px){.ckrow{grid-template-columns:30px 44px 1fr}.ckrow .chip{grid-column:3;justify-self:start}}
 #supFab{display:none}
 body.pg-suporte #addFab{display:none!important}
 @media(max-width:640px){body.pg-suporte #supFab{display:block}#supAdd{display:none}}
@@ -192,10 +200,16 @@ body.pg-suporte #addFab{display:none!important}
     </header>
     <div class="banner" id="supBanner"></div>
     <div class="subtabs">
-      <button class="on">Hora a hora</button>
+      <button data-ssub="check" class="on">Checklist do dia</button>
+      <button data-ssub="hora">Hora a hora</button>
       <button disabled>Validação diária · em breve</button>
       <button disabled>Crédito · em breve</button>
     </div>
+    <div id="sSubCheck">
+      <div class="hint" style="margin-bottom:10px">O suporte marca as tarefas no site dele. <button type="button" class="linkbtn" data-lista="tarefas">Editar tarefas</button></div>
+      <div class="grid2" id="ckTurnos"></div>
+    </div>
+    <div id="sSubHora" hidden>
     <div class="kpis">
       <div class="card kpi"><div class="lbl">Último reporte</div><div class="val" id="sUlt">—</div><div class="note" id="sUltN"></div></div>
       <div class="card kpi"><div class="lbl">Disparos enviados</div><div class="val" id="sEnv">—</div><div class="note">até o último reporte</div></div>
@@ -210,8 +224,9 @@ body.pg-suporte #addFab{display:none!important}
       <h2>Reportes do dia</h2>
       <div id="supList"></div>
       <div class="empty" id="supEmpty" style="display:none">Nenhum reporte neste dia.</div>
-      <div class="status" id="supStatus"></div>
     </div>
+    </div>
+    <div class="status" id="supStatus"></div>
   </div>
 </div>
 
@@ -298,6 +313,7 @@ body.pg-suporte #addFab{display:none!important}
   </form>
 </div>
 
+<script src="suporte/sup-core.js"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -417,7 +433,8 @@ const LISTAS={
   cats:{titulo:"Editar categorias",get:()=>catOptions(),set:a=>salvarConfig({cats:a,by:[...byOptions()]})},
   by:{titulo:'Editar "Pago por"',get:()=>byOptions(),set:a=>salvarConfig({cats:[...catOptions()],by:a})},
   disparos:{titulo:"Editar disparos",dica:"Ex.: 07h – Vencimento hoje",get:()=>supDisparos(),set:a=>salvarSupConfig({...supCfgAtual(),disparos:a})},
-  resp:{titulo:"Editar responsáveis",get:()=>supResp(),set:a=>salvarSupConfig({...supCfgAtual(),resp:a})}
+  resp:{titulo:"Editar responsáveis",get:()=>supResp(),set:a=>salvarSupConfig({...supCfgAtual(),resp:a})},
+  tarefas:{titulo:"Editar tarefas do checklist",dica:"Ex.: 15:00 – Conferir indicações no Kommo",get:()=>SupCore.tarefas(supCfg),set:a=>salvarSupConfig({...supCfgAtual(),tarefas:a})}
 };
 async function addOpcao(tipo,valor){
   valor=(valor||"").trim();if(!valor)return;
@@ -431,7 +448,7 @@ function renderLista(){
   $("lItems").innerHTML=ops.length?ops.map((o,ix)=>`<li><span>${esc(o)}</span><button type="button" data-rm="${ix}">Remover</button></li>`).join(""):'<li class="hint">Lista vazia</li>';
 }
 function abrirLista(tipo){
-  if((tipo==="disparos"||tipo==="resp")&&!supPronto){showSupBanner("Falta atualizar o Apps Script com o código novo (Code.gs) para salvar os dados do suporte.");return}
+  if((tipo==="disparos"||tipo==="resp"||tipo==="tarefas")&&!supPronto){showSupBanner("Falta atualizar o Apps Script com o código novo (Code.gs) para salvar os dados do suporte.");return}
   listaTipo=tipo;$("lTitle").textContent=LISTAS[tipo].titulo;
   $("lNew").placeholder=LISTAS[tipo].dica||"Nova opção";
   $("lNew").value="";$("lErr").textContent="";renderLista();$("ovLista").classList.add("open");setTimeout(()=>$("lNew").focus(),50);
@@ -619,9 +636,9 @@ function atrasado(nome,st){
   const a=new Date();return a.getHours()*60+a.getMinutes()>h+15;
 }
 const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
-let supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
+let supChecks=[],supSub="check",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
 let supDia=hoje();
-function supCfgAtual(){return {disparos:[...supDisparos()],resp:[...supResp()]}}
+function supCfgAtual(){return {...(supCfg||{}),disparos:[...supDisparos()],resp:[...supResp()],tarefas:[...SupCore.tarefas(supCfg)]}}
 function supDisparos(){const l=[...(supCfg?.disparos||SUP_DEF.disparos)];return l.sort((a,b)=>(horaDisparo(a)??9999)-(horaDisparo(b)??9999))}
 function supResp(){return supCfg?.resp||SUP_DEF.resp}
 async function salvarSupConfig(c){
@@ -638,7 +655,8 @@ async function loadSup(){
     supPronto=true;
     const all=r.items||[];
     const cfg=all.find(i=>i.id==="__config__");
-    if(cfg){try{const c=JSON.parse(cfg.dados);if(Array.isArray(c.disparos)&&Array.isArray(c.resp))supCfg=c}catch(e){}}
+    if(cfg){try{const c=JSON.parse(cfg.dados);if(c&&typeof c==="object")supCfg=c}catch(e){}}
+    supChecks=all.filter(i=>i.tipo==="check").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
     supItems=all.filter(i=>i.id!=="__config__"&&i.tipo==="hora").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5),fila:+i.fila||0,total:+i.total||0,criadoEm:+i.criadoEm||0,disp:parseDados(i)}));
     $("supStatus").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     showSupBanner("");renderSup();
@@ -646,6 +664,9 @@ async function loadSup(){
 }
 function renderSup(){
   $("sDate").value=supDia;
+  $("sSubCheck").hidden=supSub!=="check";$("sSubHora").hidden=supSub!=="hora";
+  document.querySelectorAll("[data-ssub]").forEach(b=>b.classList.toggle("on",b.dataset.ssub===supSub));
+  $("ckTurnos").innerHTML=SupCore.htmlChecklist(supCfg,supChecks,supDia,false,supItems);
   const dia=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)||(a.criadoEm-b.criadoEm));
   const ult=dia[dia.length-1];
   $("sUlt").textContent=ult?ult.hora:"—";$("sUltN").textContent=ult?[ult.responsavel,dia.length+" reporte(s) no dia"].filter(Boolean).join(" · "):"Sem reportes";
@@ -736,6 +757,7 @@ $("ovSup").addEventListener("click",e=>{if(e.target===$("ovSup"))fecharSup()});
 $("supAdd").onclick=()=>abrirSup();$("supFab").onclick=()=>abrirSup();
 $("sDate").onchange=()=>{if($("sDate").value){supDia=$("sDate").value;supConfirm=null;renderSup()}};
 function mudaDia(n){const [y,m,d]=supDia.split("-").map(Number);const x=new Date(y,m-1,d+n);supDia=ym(x)+"-"+String(x.getDate()).padStart(2,"0");supConfirm=null;renderSup()}
+document.querySelectorAll("[data-ssub]").forEach(b=>b.onclick=()=>{supSub=b.dataset.ssub;renderSup()});
 $("dPrev").onclick=()=>mudaDia(-1);$("dNext").onclick=()=>mudaDia(1);
 $("supList").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
