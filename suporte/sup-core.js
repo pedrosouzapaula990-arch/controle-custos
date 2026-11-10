@@ -108,15 +108,18 @@ const SupCore = (() => {
     const fmax = dia.length ? Math.max(...dia.map(i => i.fila)) : 0;
     $("sFilaN").textContent = dia.length ? "Pico do dia: " + fmax : "";
     const nomes = [...new Set([...disparos(cfg), ...(ult ? ult.disp.map(d => d.nome) : [])])];
-    const probs = nomes.map(n => ({ nome: n, status: ult?.disp.find(x => x.nome === n)?.status || "aguardando" })).filter(d => d.status === "problema" || atrasado(d.nome, d.status, diaSel));
+    const checks = opts.checks || [];
+    const conferido = n => checks.find(c => c.data === diaSel && c.id === ckId(diaSel, "Conferir disparo " + n));
+    const probs = nomes.map(n => ({ nome: n, status: ult?.disp.find(x => x.nome === n)?.status || "aguardando" })).filter(d => d.status === "problema" || (atrasado(d.nome, d.status, diaSel) && !conferido(d.nome)));
     const sr = semReporte(dia, diaSel);
     const nAl = probs.length + (sr != null ? 1 : 0);
     $("sAlert").textContent = (ult || nAl) ? nAl : "—";
     $("sAlert").className = "val" + (nAl ? " up" : "");
-    $("sAlertN").textContent = nAl ? [...(sr != null ? [`Sem reporte há ${sr} min`] : []), ...probs.map(d => curto(d.nome) + (d.status === "problema" ? "" : " atrasado"))].join(", ") : (ult ? "Tudo certo" : "");
+    $("sAlertN").textContent = nAl ? [...(sr != null ? [dia.length ? `Sem reporte há ${sr} min` : "Nenhum reporte no turno ainda"] : []), ...probs.map(d => curto(d.nome) + (d.status === "problema" ? "" : " atrasado"))].join(", ") : (ult ? "Tudo certo" : "");
     $("supDisp").innerHTML = nomes.length ? `<table class="dtab">${nomes.map(n => {
-      const d = ult?.disp.find(x => x.nome === n); const st = d?.status || "aguardando"; const at = atrasado(n, st, diaSel);
-      return `<tr><td>${esc(n)}</td><td><span class="chip ${at ? "problema" : st}">${at ? "⚠️ Atrasado" : ST[st].e + " " + ST[st].t}</span></td><td class="num">${d && d.qtd !== "" && d.qtd != null ? (+d.qtd).toLocaleString("pt-BR") : ""}</td></tr>`;
+      const d = ult?.disp.find(x => x.nome === n); const st = d?.status || "aguardando"; const ck = conferido(n); const at = atrasado(n, st, diaSel) && !ck;
+      const chip = at ? `<span class="chip problema">⚠️ Atrasado</span>` : (st === "aguardando" && ck) ? `<span class="chip concluido">✅ Conferido às ${esc(ck.hora)}</span>` : `<span class="chip ${st}">${ST[st].e} ${ST[st].t}</span>`;
+      return `<tr><td>${esc(n)}</td><td>${chip}</td><td class="num">${d && d.qtd !== "" && d.qtd != null ? (+d.qtd).toLocaleString("pt-BR") : ""}</td></tr>`;
     }).join("")}</table>` : '<div class="empty">Nenhum disparo cadastrado.</div>';
     const fm = Math.max(fmax, 1);
     $("supFila").innerHTML = dia.length ? dia.map((i, ix) => `<div class="col ${ix === dia.length - 1 ? "cur" : ""}" title="${i.hora}: ${i.fila}"><div class="t">${i.fila}</div><div class="b" style="height:${i.fila / fm * 100}%"></div><div class="m">${i.hora.replace(":00", "h")}</div></div>`).join("") : '<div class="empty">Sem dados neste dia.</div>';

@@ -667,31 +667,7 @@ function renderSup(){
   $("sSubCheck").hidden=supSub!=="check";$("sSubHora").hidden=supSub!=="hora";
   document.querySelectorAll("[data-ssub]").forEach(b=>b.classList.toggle("on",b.dataset.ssub===supSub));
   $("ckTurnos").innerHTML=SupCore.htmlChecklist(supCfg,supChecks,supDia,false,supItems);
-  const dia=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)||(a.criadoEm-b.criadoEm));
-  const ult=dia[dia.length-1];
-  $("sUlt").textContent=ult?ult.hora:"—";$("sUltN").textContent=ult?[ult.responsavel,dia.length+" reporte(s) no dia"].filter(Boolean).join(" · "):"Sem reportes";
-  $("sEnv").textContent=ult?ult.total.toLocaleString("pt-BR"):"—";
-  $("sFila").textContent=ult?ult.fila:"—";
-  const fmax=dia.length?Math.max(...dia.map(i=>i.fila)):0;$("sFilaN").textContent=dia.length?"Pico do dia: "+fmax:"";
-  const nomesAl=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
-  const probs=nomesAl.map(n=>({nome:n,status:ult?.disp.find(x=>x.nome===n)?.status||"aguardando"})).filter(d=>d.status==="problema"||atrasado(d.nome,d.status));
-  const sr=semReporte(dia);
-  const nAl=probs.length+(sr!=null?1:0);
-  $("sAlert").textContent=(ult||nAl)?nAl:"—";$("sAlert").className="val"+(nAl?" up":"");
-  $("sAlertN").textContent=nAl?[...(sr!=null?[dia.length?`Sem reporte há ${sr} min`:"Nenhum reporte no turno ainda"]:[]),...probs.map(d=>curto(d.nome)+(d.status==="problema"?"":" atrasado"))].join(", "):(ult?"Tudo certo":"");
-  const nomes=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
-  $("supDisp").innerHTML=nomes.length?`<table class="dtab">${nomes.map(n=>{const d=ult?.disp.find(x=>x.nome===n);const st=d?.status||"aguardando";const at=atrasado(n,st);
-    return `<tr><td>${esc(n)}</td><td><span class="chip ${at?"problema":st}">${at?"⚠️ Atrasado":ST[st].e+" "+ST[st].t}</span></td><td class="num">${d&&d.qtd!==""&&d.qtd!=null?(+d.qtd).toLocaleString("pt-BR"):""}</td></tr>`}).join("")}</table>`:'<div class="empty">Nenhum disparo cadastrado.</div>';
-  const fm=Math.max(fmax,1);
-  $("supFila").innerHTML=dia.length?dia.map((i,ix)=>`<div class="col ${ix===dia.length-1?"cur":""}" title="${i.hora}: ${i.fila}"><div class="t">${i.fila}</div><div class="b" style="height:${i.fila/fm*100}%"></div><div class="m">${i.hora.replace(":00","h")}</div></div>`).join(""):'<div class="empty">Sem dados neste dia.</div>';
-  $("supEmpty").style.display=dia.length?"none":"block";
-  $("supList").innerHTML=[...dia].reverse().map(i=>{
-    const act=supConfirm===i.id?`<button data-sdel="${i.id}" style="color:var(--red)">Excluir?</button> <button data-snodel>Não</button>`
-      :`<button data-scopy="${i.id}">Copiar</button> <button data-sedit="${i.id}">Editar</button> <button data-sask="${i.id}">✕</button>`;
-    return `<div class="rep"><div class="h">${esc(i.hora)}<small>${esc(i.responsavel||"")}</small></div>
-      <div><div class="chips">${i.disp.map(d=>`<span class="chip ${esc(d.status)}" title="${esc(ST[d.status]?.t||"")}">${ST[d.status]?.e||""} ${esc(curto(d.nome))}${d.qtd!==""&&d.qtd!=null?" · "+(+d.qtd).toLocaleString("pt-BR"):""}</span>`).join("")}</div>
-      <div class="meta">Enviados: <b>${i.total.toLocaleString("pt-BR")}</b> · Fila: <b>${i.fila}</b>${i.obs?" · "+esc(i.obs):""}</div></div>
-      <div class="actions">${act}</div></div>`}).join("");
+  SupCore.renderHora($,supCfg,supItems,supDia,{confirm:supConfirm,acoes:true,checks:supChecks});
 }
 function renderSupRows(vals){
   const nomes=[...new Set([...supDisparos(),...(vals||[]).map(v=>v.nome)])];

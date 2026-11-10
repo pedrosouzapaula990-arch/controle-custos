@@ -258,7 +258,7 @@ function render(){
   $("subCheck").hidden=sub!=="check";$("subHora").hidden=sub!=="hora";
   document.querySelectorAll("[data-sub]").forEach(b=>b.classList.toggle("on",b.dataset.sub===sub));
   if(sub==="check")$("ckTurnos").innerHTML=SupCore.htmlChecklist(supCfg,checks,supDia,true);
-  else SupCore.renderHora($,supCfg,supItems,supDia,{confirm:supConfirm,acoes:true});
+  else SupCore.renderHora($,supCfg,supItems,supDia,{confirm:supConfirm,acoes:true,checks});
 }
 
 // ============ checklist ============
