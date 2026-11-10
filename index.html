@@ -596,12 +596,20 @@ async function load(){
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
 }
 // ================== SUPORTE ==================
-const SUP_DEF={disparos:["07h – Disparo de cobrança","10h – Disparo de cobrança","13h – Disparo de cobrança"],resp:["Kaique","Lígia"]};
+const SUP_DEF={disparos:["07:00 – Vence hoje","10:15 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Kaique","Lígia"]};
+// horário no início do nome do disparo (ex.: "07:00 – ..." ou "07h – ...")
+function horaDisparo(n){const m=String(n).match(/^(\d{1,2})(?:[:h](\d{2}))?/);return m?(+m[1])*60+(+(m[2]||0)):null}
+// atrasado = dia de hoje, passou 15 min do horário e ainda está aguardando
+function atrasado(nome,st){
+  if(supDia!==hoje()||st!=="aguardando")return false;
+  const h=horaDisparo(nome);if(h==null)return false;
+  const a=new Date();return a.getHours()*60+a.getMinutes()>h+15;
+}
 const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
 let supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
 let supDia=hoje();
 function supCfgAtual(){return {disparos:[...supDisparos()],resp:[...supResp()]}}
-function supDisparos(){return supCfg?.disparos||SUP_DEF.disparos}
+function supDisparos(){const l=[...(supCfg?.disparos||SUP_DEF.disparos)];return l.sort((a,b)=>(horaDisparo(a)??9999)-(horaDisparo(b)??9999))}
 function supResp(){return supCfg?.resp||SUP_DEF.resp}
 async function salvarSupConfig(c){
   supCfg=c;
@@ -631,12 +639,13 @@ function renderSup(){
   $("sEnv").textContent=ult?ult.total.toLocaleString("pt-BR"):"—";
   $("sFila").textContent=ult?ult.fila:"—";
   const fmax=dia.length?Math.max(...dia.map(i=>i.fila)):0;$("sFilaN").textContent=dia.length?"Pico do dia: "+fmax:"";
-  const probs=ult?ult.disp.filter(d=>d.status==="problema"):[];
-  $("sAlert").textContent=ult?probs.length:"—";$("sAlert").className="val"+(probs.length?" up":"");
-  $("sAlertN").textContent=probs.length?probs.map(d=>curto(d.nome)).join(", "):(ult?"Tudo certo":"");
+  const nomesAl=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
+  const probs=nomesAl.map(n=>({nome:n,status:ult?.disp.find(x=>x.nome===n)?.status||"aguardando"})).filter(d=>d.status==="problema"||atrasado(d.nome,d.status));
+  $("sAlert").textContent=(ult||probs.length)?probs.length:"—";$("sAlert").className="val"+(probs.length?" up":"");
+  $("sAlertN").textContent=probs.length?probs.map(d=>curto(d.nome)+(d.status==="problema"?"":" atrasado")).join(", "):(ult?"Tudo certo":"");
   const nomes=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
-  $("supDisp").innerHTML=nomes.length?`<table class="dtab">${nomes.map(n=>{const d=ult?.disp.find(x=>x.nome===n);const st=d?.status||"aguardando";
-    return `<tr><td>${esc(n)}</td><td><span class="chip ${st}">${ST[st].e} ${ST[st].t}</span></td><td class="num">${d&&d.qtd!==""&&d.qtd!=null?(+d.qtd).toLocaleString("pt-BR"):""}</td></tr>`}).join("")}</table>`:'<div class="empty">Nenhum disparo cadastrado.</div>';
+  $("supDisp").innerHTML=nomes.length?`<table class="dtab">${nomes.map(n=>{const d=ult?.disp.find(x=>x.nome===n);const st=d?.status||"aguardando";const at=atrasado(n,st);
+    return `<tr><td>${esc(n)}</td><td><span class="chip ${at?"problema":st}">${at?"⚠️ Atrasado":ST[st].e+" "+ST[st].t}</span></td><td class="num">${d&&d.qtd!==""&&d.qtd!=null?(+d.qtd).toLocaleString("pt-BR"):""}</td></tr>`}).join("")}</table>`:'<div class="empty">Nenhum disparo cadastrado.</div>';
   const fm=Math.max(fmax,1);
   $("supFila").innerHTML=dia.length?dia.map((i,ix)=>`<div class="col ${ix===dia.length-1?"cur":""}" title="${i.hora}: ${i.fila}"><div class="t">${i.fila}</div><div class="b" style="height:${i.fila/fm*100}%"></div><div class="m">${i.hora.replace(":00","h")}</div></div>`).join(""):'<div class="empty">Sem dados neste dia.</div>';
   $("supEmpty").style.display=dia.length?"none":"block";
