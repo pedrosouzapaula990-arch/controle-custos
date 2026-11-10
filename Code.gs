@@ -219,6 +219,8 @@ function calcularValidacao(bases, hoje, desde) {
     infoBases.push({ nome: b.nome, linhas: b.n || 0, vazia: !b.n, faltando: b.n ? faltando : [] });
     if (!b.n || faltando.length) return;
     consumo.porBase[b.nome] = 0;
+    consumo.detalheBase = consumo.detalheBase || {};
+    const det = consumo.detalheBase[b.nome] = { vendas: 0, renovacoes: 0, clientesVendas: 0, clientesRenovacoes: 0 };
     for (let r = 0; r < b.n; r++) {
       const v = c => String(b.cols[c][r] || "").trim();
       if (/duplicad/i.test(v("Etapa do lead"))) continue;
@@ -237,8 +239,8 @@ function calcularValidacao(bases, hoje, desde) {
       if (!inCad && !inRen) continue;
       const vezes = (inCad ? 1 : 0) + (inRen ? 1 : 0);
       consumo.total += cred * vezes; consumo.porBase[b.nome] += cred * vezes;
-      if (inCad) { consumo.vendas += cred; consumo.linhasVendas++; }
-      if (inRen) { consumo.renovacoes += cred; consumo.linhasRenovacoes++; }
+      if (inCad) { consumo.vendas += cred; consumo.linhasVendas++; det.vendas += cred; det.clientesVendas++; }
+      if (inRen) { consumo.renovacoes += cred; consumo.linhasRenovacoes++; det.renovacoes += cred; det.clientesRenovacoes++; }
       const chaveServ = servs.length ? servs.join(", ") : "Sem servidor";
       consumo.porServidor[chaveServ] = (consumo.porServidor[chaveServ] || 0) + cred * vezes;
 
