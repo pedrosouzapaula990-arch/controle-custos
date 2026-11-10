@@ -157,7 +157,8 @@ const SupCore = (() => {
     const b = (res.bases || []).map(x => x.vazia ? `<span class="chip problema">${esc(x.nome)}: vazia</span>`
       : x.faltando.length ? `<span class="chip problema">${esc(x.nome)}: faltam colunas ${esc(x.faltando.join(", "))}</span>`
       : `<span class="chip">${esc(x.nome)}: ${x.linhas.toLocaleString("pt-BR")} linhas</span>`).join(" ");
-    return `<div class="chips" style="margin-bottom:10px">${b}</div>`;
+    const quando = res.basesAlteradas ? `<div class="hint" style="margin-top:6px">Bases alteradas em <b>${esc(res.basesAlteradas)}</b> · cálculo de ${esc(res.calculadoEm || "")}. Só recalcula quando as bases mudarem.</div>` : "";
+    return `<div class="chips" style="margin-bottom:4px">${b}</div>${quando}`;
   }
   function filtrarErros(res, marks, f) {
     const mm = marcasMap(marks);
@@ -221,7 +222,7 @@ const SupCore = (() => {
     const n = x => (+x || 0).toLocaleString("pt-BR");
     let html = alerta ? `<div class="banner" style="display:block">⚠️ Saldo de créditos em <b>${n(saldo)}</b>, abaixo do limite de ${LIMITE}. Pedir recarga.</div>` : "";
     html += `<div class="kpis">
-      ${k("Consumo em " + mesNome, n(c.total), "créditos até " + res.hoje.split("-").reverse().slice(0, 2).join("/"))}
+      ${k("Consumo em " + mesNome, n(c.total), (res.basesAlteradas ? "bases de " + res.basesAlteradas : "créditos até " + res.hoje.split("-").reverse().slice(0, 2).join("/")))}
       ${k("Vendas", n(c.vendas), n(c.linhasVendas) + " cliente(s)")}
       ${k("Renovações", n(c.renovacoes), n(c.linhasRenovacoes) + " cliente(s)")}
       ${k("Saldo estimado", saldo == null ? "—" : n(saldo), saldo == null ? (owner ? "Registre o saldo atual abaixo" : "Saldo ainda não informado") : "desde " + inf.desde.split("-").reverse().join("/") + " · limite " + LIMITE, alerta ? "up" : "")}

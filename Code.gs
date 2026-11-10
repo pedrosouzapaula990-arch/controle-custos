@@ -158,14 +158,22 @@ function basesSS_() {
 const BASES = ["Base Darb Oficial", "Base Motiva"];
 const COLS_BASE = ["ID", "Contato principal", "Etapa do lead", "Data Cadastro", "Data Renovação", "Plano", "Telas", "Servidor", "Vendedor", "Data de Vencimento"];
 
+// Só recalcula quando a planilha das bases é alterada (ou ao clicar em Recalcular).
+// O último resultado fica salvo num arquivo no Drive e volta na hora.
 function validar_(p) {
   const tz = Session.getScriptTimeZone();
-  const hoje = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
-  const cache = CacheService.getScriptCache();
-  const chave = "validar-" + hoje + "-" + (p.desde || "") + "-" + versaoBases_();
-  const emCache = cacheGet_(cache, chave);
-  if (emCache && !p.forcar) return JSON.parse(emCache);
+  const agora = new Date();
+  const hoje = Utilities.formatDate(agora, tz, "yyyy-MM-dd");
   const ss = basesSS_();
+  const alterada = DriveApp.getFileById(ss.getId()).getLastUpdated();
+  const versao = alterada.getTime() + "|" + (p.desde || "") + "|" + hoje.slice(0, 7);
+  const arq = arquivoCalculo_();
+  if (!p.forcar) {
+    try {
+      const salvo = JSON.parse(arq.getBlob().getDataAsString());
+      if (salvo && salvo.versao === versao && salvo.out) { salvo.out.doCache = true; return salvo.out; }
+    } catch (e) {}
+  }
   const bases = BASES.map(nome => {
     const sh = ss.getSheetByName(nome);
     if (!sh || sh.getLastRow() < 2) return { nome: nome, head: [], cols: {} };
@@ -180,32 +188,15 @@ function validar_(p) {
   });
   const out = calcularValidacao(bases, hoje, p.desde || "");
   out.ok = true; out.aba = "Suporte"; out.basesUrl = ss.getUrl();
-  cachePut_(cache, chave, JSON.stringify(out), 600);
+  out.basesAlteradas = Utilities.formatDate(alterada, tz, "dd/MM HH:mm");
+  out.calculadoEm = Utilities.formatDate(agora, tz, "dd/MM HH:mm");
+  try { arq.setContent(JSON.stringify({ versao: versao, out: out })); } catch (e) {}
   return out;
 }
-// CacheService aceita até 100 KB por chave: guarda em pedaços
-function cachePut_(cache, chave, txt, seg) {
-  try {
-    const partes = [], T = 90000;
-    for (let i = 0; i < txt.length; i += T) partes.push(txt.slice(i, i + T));
-    const obj = { [chave + "-n"]: String(partes.length) };
-    partes.forEach((pt, i) => obj[chave + "-" + i] = pt);
-    cache.putAll(obj, seg);
-  } catch (e) {}
-}
-function cacheGet_(cache, chave) {
-  try {
-    const n = +cache.get(chave + "-n"); if (!n) return null;
-    const ks = []; for (let i = 0; i < n; i++) ks.push(chave + "-" + i);
-    const got = cache.getAll(ks); let txt = "";
-    for (const k of ks) { if (got[k] == null) return null; txt += got[k]; }
-    return txt;
-  } catch (e) { return null; }
-}
-// muda quando o conteúdo das bases muda (nº de linhas + última célula)
-function versaoBases_() {
-  const ss = basesSS_();
-  return BASES.map(n => { const sh = ss.getSheetByName(n); return sh ? sh.getLastRow() + "x" + sh.getLastColumn() : "0"; }).join("-");
+function arquivoCalculo_() {
+  const nome = "ultimo-calculo-validacao.json", pasta = pasta_();
+  const it = pasta.getFilesByName(nome);
+  return it.hasNext() ? it.next() : pasta.createFile(nome, "{}", "application/json");
 }
 
 // ---- regra (pura, sem dependência do Google) ----
