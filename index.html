@@ -96,22 +96,42 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 .optlist li:last-child{border-bottom:0}
 .optlist button{padding:3px 9px;font-size:12px}
 .addrow{display:flex;gap:8px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.tabs a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a.on{color:var(--ink);border-color:var(--accent)}
+.subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.subtabs button{border-radius:999px;font-size:13px;padding:6px 12px}
+.subtabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.dnav input{width:auto}
+.rep{display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.rep:last-child{border-bottom:0}
+.rep .h{font-weight:700;font-size:16px}
+.rep .h small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.rep .meta{font-size:13px;color:var(--muted);margin-top:4px}
+@media(max-width:640px){.rep{grid-template-columns:64px 1fr}.rep .actions{grid-column:1/-1;text-align:left}}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--line);color:var(--ink);white-space:nowrap}
+.chip.concluido{background:var(--accent-soft);color:var(--accent)}
+.chip.andamento{background:#e6effc;color:#1d4ed8}
+.chip.problema{background:var(--red-soft);color:var(--red)}
+@media (prefers-color-scheme:dark){.chip.andamento{background:#172554;color:#93c5fd}}
+.drow{display:grid;grid-template-columns:1fr 150px 90px;gap:8px;align-items:center;margin-bottom:8px}
+.drow .nm{font-size:14px;font-weight:500}
+@media(max-width:520px){.drow{grid-template-columns:1fr 1fr}.drow .nm{grid-column:1/-1}}
+.dtab{width:100%}
+.dtab td{padding:8px 4px;font-size:14px}
+@media(max-width:640px){.dtab tr{display:table-row}.dtab td{display:table-cell;border-bottom:1px solid var(--line);padding:8px 4px}}
+#supFab{display:none}
+body.pg-suporte #addFab{display:none!important}
+@media(max-width:640px){body.pg-suporte #supFab{display:block}#supAdd{display:none}}
 .fab{position:fixed;right:18px;bottom:18px;border-radius:999px;padding:14px 20px;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none}
-@media(max-width:640px){.hint{font-size:12px;color:var(--muted)}
-.ref{font-size:11px;font-weight:600;color:var(--accent);margin-left:4px}
-a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;margin-left:6px}
-.lblrow{display:flex;justify-content:space-between;align-items:center}
-.linkbtn{border:0;background:none;padding:0;color:var(--accent);font-size:12px;font-weight:600}
-.optlist{list-style:none;margin:0 0 12px;padding:0;max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
-.optlist li{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
-.optlist li:last-child{border-bottom:0}
-.optlist button{padding:3px 9px;font-size:12px}
-.addrow{display:flex;gap:8px}
-.fab{display:block}#addTop{display:none}}
+@media(max-width:640px){.fab{display:block}#addTop{display:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <nav class="tabs"><a href="#custos" id="tabCustos" class="on">Custos</a><a href="#suporte" id="tabSuporte">Suporte</a></nav>
+  <div id="pgCustos">
   <header>
     <div>
       <h1>Controle de Custos</h1>
@@ -155,9 +175,73 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
     <div class="empty" id="emptyList" style="display:none">Nenhum custo lançado neste mês.</div>
     <div class="status" id="status">Conectando…</div>
   </div>
+  </div>
+
+  <div id="pgSuporte" hidden>
+    <header>
+      <div>
+        <h1>Suporte</h1>
+        <div class="sub">Acompanhamento hora a hora e validações</div>
+      </div>
+      <div class="monthnav dnav">
+        <button class="icon" id="dPrev" aria-label="Dia anterior">‹</button>
+        <input type="date" id="sDate">
+        <button class="icon" id="dNext" aria-label="Próximo dia">›</button>
+        <button class="primary" id="supAdd">+ Novo reporte</button>
+      </div>
+    </header>
+    <div class="banner" id="supBanner"></div>
+    <div class="subtabs">
+      <button class="on">Hora a hora</button>
+      <button disabled>Validação diária · em breve</button>
+      <button disabled>Crédito · em breve</button>
+    </div>
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Último reporte</div><div class="val" id="sUlt">—</div><div class="note" id="sUltN"></div></div>
+      <div class="card kpi"><div class="lbl">Disparos enviados</div><div class="val" id="sEnv">—</div><div class="note">até o último reporte</div></div>
+      <div class="card kpi"><div class="lbl">Fila de atendimento</div><div class="val" id="sFila">—</div><div class="note" id="sFilaN"></div></div>
+      <div class="card kpi"><div class="lbl">Alertas</div><div class="val" id="sAlert">—</div><div class="note" id="sAlertN"></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="toolbar" style="margin-bottom:4px"><h2 style="margin:0">Situação dos disparos</h2><button type="button" class="linkbtn" data-lista="disparos">Editar disparos</button></div><div id="supDisp"></div></div>
+      <div class="card"><h2>Fila ao longo do dia</h2><div class="cols" id="supFila"></div></div>
+    </div>
+    <div class="card">
+      <h2>Reportes do dia</h2>
+      <div id="supList"></div>
+      <div class="empty" id="supEmpty" style="display:none">Nenhum reporte neste dia.</div>
+      <div class="status" id="supStatus"></div>
+    </div>
+  </div>
 </div>
 
 <button class="primary fab" id="addFab">+ Novo custo</button>
+<button class="primary fab" id="supFab">+ Novo reporte</button>
+
+<div class="overlay" id="ovSup">
+  <form class="modal" id="formSup">
+    <h3 id="supTitle">Novo reporte</h3>
+    <div class="row2">
+      <div class="field"><label for="rData">Data</label><input id="rData" type="date" required></div>
+      <div class="field"><label for="rHora">Hora do reporte</label><input id="rHora" type="time" required></div>
+    </div>
+    <div class="field"><div class="lblrow"><label for="sResp">Responsável</label><button type="button" class="linkbtn" data-lista="resp">Editar lista</button></div>
+      <select id="sResp" class="pick" data-new="nResp"></select>
+      <input id="nResp" class="newopt" placeholder="Nome" style="display:none">
+    </div>
+    <div class="field"><div class="lblrow"><label>Disparos</label><button type="button" class="linkbtn" data-lista="disparos">Editar disparos</button></div>
+      <div id="rRows"></div>
+    </div>
+    <div class="field"><label for="rFila">Pessoas na fila de atendimento</label><input id="rFila" type="number" min="0" inputmode="numeric" required></div>
+    <div class="field"><label for="rObs">Observação (opcional)</label><input id="rObs" placeholder="Ex.: disparo das 10h travou e foi reiniciado"></div>
+    <div class="err" id="rErr"></div>
+    <div class="mfoot">
+      <button type="button" id="rCancel">Cancelar</button>
+      <button type="button" id="rSaveCopy">Salvar e copiar</button>
+      <button type="submit" class="primary" id="rSave">Salvar</button>
+    </div>
+  </form>
+</div>
 
 <div class="overlay" id="ov">
   <form class="modal" id="form">
@@ -242,6 +326,7 @@ function apiJsonp(action, payload){
     const params=new URLSearchParams({action,callback:cb});
     if(payload&&payload.item)params.set("item",JSON.stringify(payload.item));
     if(payload&&payload.id)params.set("id",payload.id);
+    if(payload&&payload.aba)params.set("aba",payload.aba);
     const sc=document.createElement("script");
     const t=setTimeout(()=>{done();reject(new Error("Sem resposta da API (tempo esgotado)."))},20000);
     function done(){clearTimeout(t);delete window[cb];sc.remove()}
@@ -328,19 +413,27 @@ async function salvarConfig(c){
   config=c;
   await api("save",{item:{id:"__config__",data:"",descricao:"(configuração do site - não apagar)",categoria:"",valor:0,pagoPor:"",status:"config",obs:JSON.stringify(c),criadoEm:0,mesRef:"",comprovante:""}});
 }
+const LISTAS={
+  cats:{titulo:"Editar categorias",get:()=>catOptions(),set:a=>salvarConfig({cats:a,by:[...byOptions()]})},
+  by:{titulo:'Editar "Pago por"',get:()=>byOptions(),set:a=>salvarConfig({cats:[...catOptions()],by:a})},
+  disparos:{titulo:"Editar disparos",dica:"Ex.: 07h – Vencimento hoje",get:()=>supDisparos(),set:a=>salvarSupConfig({...supCfgAtual(),disparos:a})},
+  resp:{titulo:"Editar responsáveis",get:()=>supResp(),set:a=>salvarSupConfig({...supCfgAtual(),resp:a})}
+};
 async function addOpcao(tipo,valor){
   valor=(valor||"").trim();if(!valor)return;
-  const c={cats:[...catOptions()],by:[...byOptions()]};
-  if(c[tipo].some(o=>o.toLowerCase()===valor.toLowerCase()))return;
-  c[tipo].push(valor);await salvarConfig(c);
+  const atual=[...LISTAS[tipo].get()];
+  if(atual.some(o=>o.toLowerCase()===valor.toLowerCase()))return;
+  atual.push(valor);await LISTAS[tipo].set(atual);
 }
 let listaTipo=null;
 function renderLista(){
-  const ops=listaTipo==="cats"?catOptions():byOptions();
+  const ops=LISTAS[listaTipo].get();
   $("lItems").innerHTML=ops.length?ops.map((o,ix)=>`<li><span>${esc(o)}</span><button type="button" data-rm="${ix}">Remover</button></li>`).join(""):'<li class="hint">Lista vazia</li>';
 }
 function abrirLista(tipo){
-  listaTipo=tipo;$("lTitle").textContent=tipo==="cats"?"Editar categorias":"Editar \"Pago por\"";
+  if((tipo==="disparos"||tipo==="resp")&&!supPronto){showSupBanner("Falta atualizar o Apps Script com o código novo (Code.gs) para salvar os dados do suporte.");return}
+  listaTipo=tipo;$("lTitle").textContent=LISTAS[tipo].titulo;
+  $("lNew").placeholder=LISTAS[tipo].dica||"Nova opção";
   $("lNew").value="";$("lErr").textContent="";renderLista();$("ovLista").classList.add("open");setTimeout(()=>$("lNew").focus(),50);
 }
 async function fecharLista(){
@@ -349,6 +442,11 @@ async function fecharLista(){
     const cv=readPick("sCat","nCat"),bv=readPick("sBy","nBy");
     fillPick("sCat","nCat",catOptions(),cv);fillPick("sBy","nBy",byOptions(),bv,"(não informar)");updMes();
   }
+  if($("ovSup").classList.contains("open")){
+    const rv=readPick("sResp","nResp");fillPick("sResp","nResp",supResp(),rv);
+    renderSupRows(lerSupRows());
+  }
+  if(pagina==="suporte")renderSup();
 }
 document.querySelectorAll("[data-lista]").forEach(b=>b.onclick=()=>abrirLista(b.dataset.lista));
 $("lClose").onclick=fecharLista;
@@ -359,9 +457,9 @@ $("formLista").addEventListener("submit",async e=>{
 });
 $("lItems").addEventListener("click",async e=>{
   const b=e.target.closest("[data-rm]");if(!b)return;
-  const c={cats:[...catOptions()],by:[...byOptions()]};c[listaTipo].splice(+b.dataset.rm,1);
+  const a=[...LISTAS[listaTipo].get()];a.splice(+b.dataset.rm,1);
   b.disabled=true;$("lErr").textContent="";
-  try{await salvarConfig(c);renderLista()}catch(err){$("lErr").textContent="Não foi possível salvar: "+err.message;b.disabled=false}
+  try{await LISTAS[listaTipo].set(a);renderLista()}catch(err){$("lErr").textContent="Não foi possível salvar: "+err.message;b.disabled=false}
 });
 function fillPick(sel,inp,opts,val,emptyLabel){
   if(val&&!opts.includes(val))opts=[...opts,val];
@@ -497,9 +595,151 @@ async function load(){
     showBanner("");render();return true;
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
 }
+// ================== SUPORTE ==================
+const SUP_DEF={disparos:["07h – Disparo de cobrança","10h – Disparo de cobrança","13h – Disparo de cobrança"],resp:["Kaique","Lígia"]};
+const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
+let supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
+let supDia=hoje();
+function supCfgAtual(){return {disparos:[...supDisparos()],resp:[...supResp()]}}
+function supDisparos(){return supCfg?.disparos||SUP_DEF.disparos}
+function supResp(){return supCfg?.resp||SUP_DEF.resp}
+async function salvarSupConfig(c){
+  supCfg=c;
+  await api("save",{aba:"Suporte",item:{id:"__config__",tipo:"config",data:"",hora:"",responsavel:"",fila:0,total:0,status:"",dados:JSON.stringify(c),obs:"(configuração do site - não apagar)",criadoEm:0}});
+}
+function showSupBanner(t){$("supBanner").textContent=t;$("supBanner").style.display=t?"block":"none"}
+function parseDados(r){try{const d=JSON.parse(r.dados||"[]");return Array.isArray(d)?d:[]}catch(e){return []}}
+function curto(n){return String(n).split(/\s+[–-]\s+/)[0]}
+async function loadSup(){
+  try{
+    const r=await api("list",{aba:"Suporte"});
+    if(r.aba!=="Suporte"){supPronto=false;showSupBanner("Falta atualizar o Apps Script com o código novo (Code.gs) para salvar os reportes do suporte.");$("supStatus").textContent="";renderSup();return}
+    supPronto=true;
+    const all=r.items||[];
+    const cfg=all.find(i=>i.id==="__config__");
+    if(cfg){try{const c=JSON.parse(cfg.dados);if(Array.isArray(c.disparos)&&Array.isArray(c.resp))supCfg=c}catch(e){}}
+    supItems=all.filter(i=>i.id!=="__config__"&&i.tipo==="hora").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5),fila:+i.fila||0,total:+i.total||0,criadoEm:+i.criadoEm||0,disp:parseDados(i)}));
+    $("supStatus").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    showSupBanner("");renderSup();
+  }catch(e){showSupBanner("Erro ao carregar o suporte: "+e.message)}
+}
+function renderSup(){
+  $("sDate").value=supDia;
+  const dia=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)||(a.criadoEm-b.criadoEm));
+  const ult=dia[dia.length-1];
+  $("sUlt").textContent=ult?ult.hora:"—";$("sUltN").textContent=ult?[ult.responsavel,dia.length+" reporte(s) no dia"].filter(Boolean).join(" · "):"Sem reportes";
+  $("sEnv").textContent=ult?ult.total.toLocaleString("pt-BR"):"—";
+  $("sFila").textContent=ult?ult.fila:"—";
+  const fmax=dia.length?Math.max(...dia.map(i=>i.fila)):0;$("sFilaN").textContent=dia.length?"Pico do dia: "+fmax:"";
+  const probs=ult?ult.disp.filter(d=>d.status==="problema"):[];
+  $("sAlert").textContent=ult?probs.length:"—";$("sAlert").className="val"+(probs.length?" up":"");
+  $("sAlertN").textContent=probs.length?probs.map(d=>curto(d.nome)).join(", "):(ult?"Tudo certo":"");
+  const nomes=[...new Set([...supDisparos(),...(ult?ult.disp.map(d=>d.nome):[])])];
+  $("supDisp").innerHTML=nomes.length?`<table class="dtab">${nomes.map(n=>{const d=ult?.disp.find(x=>x.nome===n);const st=d?.status||"aguardando";
+    return `<tr><td>${esc(n)}</td><td><span class="chip ${st}">${ST[st].e} ${ST[st].t}</span></td><td class="num">${d&&d.qtd!==""&&d.qtd!=null?(+d.qtd).toLocaleString("pt-BR"):""}</td></tr>`}).join("")}</table>`:'<div class="empty">Nenhum disparo cadastrado.</div>';
+  const fm=Math.max(fmax,1);
+  $("supFila").innerHTML=dia.length?dia.map((i,ix)=>`<div class="col ${ix===dia.length-1?"cur":""}" title="${i.hora}: ${i.fila}"><div class="t">${i.fila}</div><div class="b" style="height:${i.fila/fm*100}%"></div><div class="m">${i.hora.replace(":00","h")}</div></div>`).join(""):'<div class="empty">Sem dados neste dia.</div>';
+  $("supEmpty").style.display=dia.length?"none":"block";
+  $("supList").innerHTML=[...dia].reverse().map(i=>{
+    const act=supConfirm===i.id?`<button data-sdel="${i.id}" style="color:var(--red)">Excluir?</button> <button data-snodel>Não</button>`
+      :`<button data-scopy="${i.id}">Copiar</button> <button data-sedit="${i.id}">Editar</button> <button data-sask="${i.id}">✕</button>`;
+    return `<div class="rep"><div class="h">${esc(i.hora)}<small>${esc(i.responsavel||"")}</small></div>
+      <div><div class="chips">${i.disp.map(d=>`<span class="chip ${esc(d.status)}" title="${esc(ST[d.status]?.t||"")}">${ST[d.status]?.e||""} ${esc(curto(d.nome))}${d.qtd!==""&&d.qtd!=null?" · "+(+d.qtd).toLocaleString("pt-BR"):""}</span>`).join("")}</div>
+      <div class="meta">Enviados: <b>${i.total.toLocaleString("pt-BR")}</b> · Fila: <b>${i.fila}</b>${i.obs?" · "+esc(i.obs):""}</div></div>
+      <div class="actions">${act}</div></div>`}).join("");
+}
+function renderSupRows(vals){
+  const nomes=[...new Set([...supDisparos(),...(vals||[]).map(v=>v.nome)])];
+  $("rRows").innerHTML=nomes.map(n=>{const v=(vals||[]).find(x=>x.nome===n)||{};const st=v.status||"aguardando";
+    return `<div class="drow" data-nome="${esc(n)}"><div class="nm">${esc(n)}</div>
+      <select class="rSt">${Object.entries(ST).map(([k,o])=>`<option value="${k}" ${k===st?"selected":""}>${o.e} ${o.t}</option>`).join("")}</select>
+      <input class="rQt" type="number" min="0" inputmode="numeric" placeholder="Enviados" value="${v.qtd??""}"></div>`}).join("")||'<div class="hint">Nenhum disparo cadastrado. Clique em "Editar disparos".</div>';
+}
+function lerSupRows(){return [...$("rRows").querySelectorAll(".drow")].map(r=>({nome:r.dataset.nome,status:r.querySelector(".rSt").value,qtd:r.querySelector(".rQt").value===""?"":+r.querySelector(".rQt").value}))}
+function abrirSup(item){
+  if(!supPronto){showSupBanner("Falta atualizar o Apps Script com o código novo (Code.gs) para salvar os reportes do suporte.");return}
+  supEditId=item?.id||null;
+  $("supTitle").textContent=item?"Editar reporte":"Novo reporte";
+  const agora=new Date();
+  $("rData").value=item?.data||supDia;
+  $("rHora").value=item?.hora||(String(agora.getHours()).padStart(2,"0")+":00");
+  const anterior=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)).pop();
+  fillPick("sResp","nResp",supResp(),item?.responsavel||anterior?.responsavel||"");
+  renderSupRows(item?item.disp:(anterior?anterior.disp:[]));
+  $("rFila").value=item?item.fila:"";
+  $("rObs").value=item?.obs||"";$("rErr").textContent="";
+  $("ovSup").classList.add("open");
+}
+function fecharSup(){$("ovSup").classList.remove("open");supEditId=null}
+function textoWhats(i){
+  const [y,m,d]=i.data.split("-");
+  const linhas=[`*Reporte ${i.hora} – ${d}/${m}*`];
+  if(i.responsavel)linhas.push(`Responsável: ${i.responsavel}`);
+  linhas.push("","📤 *Disparos*");
+  i.disp.forEach(x=>linhas.push(`${ST[x.status]?.e||""} ${x.nome}: ${ST[x.status]?.t||""}${x.qtd!==""&&x.qtd!=null?" – "+(+x.qtd).toLocaleString("pt-BR")+" enviados":""}`));
+  linhas.push(`Total enviado até agora: *${(+i.total).toLocaleString("pt-BR")}*`,"",`👥 Fila de atendimento: *${i.fila}*`);
+  if(i.obs)linhas.push("",`📝 ${i.obs}`);
+  return linhas.join("\n");
+}
+async function copiar(txt,btn){
+  try{await navigator.clipboard.writeText(txt);if(btn){const o=btn.textContent;btn.textContent="Copiado ✓";setTimeout(()=>btn.textContent=o,1500)}return true}
+  catch(e){showSupBanner("Não foi possível copiar automaticamente.");return false}
+}
+async function salvarSup(copiarDepois){
+  const disp=lerSupRows();
+  const resp=readPick("sResp","nResp");
+  if(!resp){$("rErr").textContent="Escolha o responsável.";return}
+  if($("rFila").value===""){$("rErr").textContent="Informe quantas pessoas estão na fila.";return}
+  const old=supEditId?supItems.find(i=>i.id===supEditId):null;
+  const item={id:supEditId||("r"+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),tipo:"hora",data:$("rData").value,hora:$("rHora").value,
+    responsavel:resp,fila:+$("rFila").value||0,total:disp.reduce((s,d)=>s+(+d.qtd||0),0),
+    status:disp.some(d=>d.status==="problema")?"alerta":"ok",dados:JSON.stringify(disp),obs:$("rObs").value.trim(),criadoEm:old?.criadoEm||Date.now()};
+  $("rSave").disabled=$("rSaveCopy").disabled=true;
+  try{
+    if(copiarDepois)await copiar(textoWhats({...item,disp}),$("rSaveCopy"));
+    await api("save",{aba:"Suporte",item});
+    if($("sResp").value===NEW)await addOpcao("resp",resp);
+    supDia=item.data;fecharSup();await loadSup();
+  }catch(err){$("rErr").textContent="Não foi possível salvar: "+err.message}
+  finally{$("rSave").disabled=$("rSaveCopy").disabled=false}
+}
+$("formSup").addEventListener("submit",e=>{e.preventDefault();salvarSup(false)});
+$("rSaveCopy").onclick=()=>{if($("formSup").reportValidity())salvarSup(true)};
+$("rCancel").onclick=fecharSup;
+$("ovSup").addEventListener("click",e=>{if(e.target===$("ovSup"))fecharSup()});
+$("supAdd").onclick=()=>abrirSup();$("supFab").onclick=()=>abrirSup();
+$("sDate").onchange=()=>{if($("sDate").value){supDia=$("sDate").value;supConfirm=null;renderSup()}};
+function mudaDia(n){const [y,m,d]=supDia.split("-").map(Number);const x=new Date(y,m-1,d+n);supDia=ym(x)+"-"+String(x.getDate()).padStart(2,"0");supConfirm=null;renderSup()}
+$("dPrev").onclick=()=>mudaDia(-1);$("dNext").onclick=()=>mudaDia(1);
+$("supList").addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  const it=id=>supItems.find(i=>i.id===id);
+  if(b.dataset.scopy)copiar(textoWhats(it(b.dataset.scopy)),b);
+  else if(b.dataset.sedit)abrirSup(it(b.dataset.sedit));
+  else if(b.dataset.sask){supConfirm=b.dataset.sask;renderSup()}
+  else if(b.hasAttribute("data-snodel")){supConfirm=null;renderSup()}
+  else if(b.dataset.sdel){b.disabled=true;try{await api("delete",{aba:"Suporte",id:b.dataset.sdel})}catch(err){showSupBanner("Não foi possível excluir: "+err.message)}supConfirm=null;await loadSup()}
+});
+
+// ---- navegação entre abas ----
+function rota(){
+  pagina=location.hash==="#suporte"?"suporte":"custos";
+  $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";
+  $("tabCustos").classList.toggle("on",pagina==="custos");$("tabSuporte").classList.toggle("on",pagina==="suporte");
+  document.body.classList.toggle("pg-suporte",pagina==="suporte");
+  if(pagina==="suporte"){renderSup();loadSup()}
+}
+window.addEventListener("hashchange",rota);
+
 render();
 load();
-setInterval(()=>{if(!$("ov").classList.contains("open"))load()},60000);
+rota();
+setInterval(()=>{
+  const aberto=["ov","ovSup","ovLista","ovBaixa"].some(id=>$(id).classList.contains("open"));
+  if(aberto)return;
+  if(pagina==="suporte")loadSup();else load();
+},60000);
+
 </script>
 </body>
 </html>
