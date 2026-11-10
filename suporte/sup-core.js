@@ -48,9 +48,10 @@ const SupCore = (() => {
     out.forEach(t => { const tu = turnoDe(t.min) || (t.min < TURNOS[0].ini ? TURNOS[0] : TURNOS[1]); t.turno = tu.nome; t.tk = tu.chave; });
     return out.sort((a, b) => a.min - b.min);
   }
-  function ckId(dia, texto) {
+  // id da tarefa marcada: dia + horário + texto (tarefas com o mesmo texto em turnos diferentes não se misturam)
+  function ckId(dia, texto, hora) {
     const slug = texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-    return "ck-" + dia + "-" + slug;
+    return "ck-" + dia + "-" + String(hora || "").replace(":", "") + "-" + slug;
   }
   function statusTarefa(t, feito, dia) {
     if (feito) return { cls: "concluido", txt: "✅ Feita às " + feito.hora };
@@ -65,7 +66,7 @@ const SupCore = (() => {
     return TURNOS.map(tu => {
       const ts = lista.filter(t => t.tk === tu.chave);
       const rows = ts.map(t => {
-        const f = checks.find(c => c.id === ckId(dia, t.texto) && c.data === dia);
+        const f = checks.find(c => c.id === ckId(dia, t.texto, t.hora) && c.data === dia);
         const st = statusTarefa(t, f, dia);
         const btn = interativo
           ? `<button type="button" class="ckbtn ${f ? "on" : ""}" data-ck="${encodeURIComponent(JSON.stringify({ texto: t.texto, hora: t.hora, turno: t.turno }))}" aria-label="${f ? "Desmarcar" : "Marcar como feita"}">${f ? "✓" : ""}</button>`
@@ -73,7 +74,7 @@ const SupCore = (() => {
         const obs = f && f.obs ? `<div class="hint">📝 ${esc(f.obs)}</div>` : "";
         return `<div class="ckrow">${btn}<div class="ckh">${t.hora}</div><div class="ckt">${esc(t.texto)}${obs}</div><span class="chip ${st.cls}">${st.txt}</span></div>`;
       }).join("") || '<div class="empty">Nenhuma tarefa neste turno.</div>';
-      const feitas = ts.filter(t => checks.some(c => c.id === ckId(dia, t.texto) && c.data === dia)).length;
+      const feitas = ts.filter(t => checks.some(c => c.id === ckId(dia, t.texto, t.hora) && c.data === dia)).length;
       const pct = ts.length ? Math.round(feitas / ts.length * 100) : 0;
       const nRep = reportes ? reportes.filter(r => r.data === dia && hm2min(r.hora) >= tu.ini && hm2min(r.hora) < tu.fim).length : null;
       return `<div class="card"><div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">${tu.nome} <span class="hint">· ${tu.faixa}</span></h2><span class="hint"><b>${feitas}/${ts.length}</b> feitas</span></div>
@@ -109,7 +110,8 @@ const SupCore = (() => {
     $("sFilaN").textContent = dia.length ? "Pico do dia: " + fmax : "";
     const nomes = [...new Set([...disparos(cfg), ...(ult ? ult.disp.map(d => d.nome) : [])])];
     const checks = opts.checks || [];
-    const conferido = n => checks.find(c => c.data === diaSel && c.id === ckId(diaSel, "Conferir disparo " + n));
+    const horaTarefa = {}; tarefasDoDia(cfg).forEach(t => horaTarefa[t.texto] = t.hora);
+    const conferido = n => checks.find(c => c.data === diaSel && c.id === ckId(diaSel, "Conferir disparo " + n, horaTarefa["Conferir disparo " + n]));
     const probs = nomes.map(n => ({ nome: n, status: ult?.disp.find(x => x.nome === n)?.status || "aguardando" })).filter(d => d.status === "problema" || (atrasado(d.nome, d.status, diaSel) && !conferido(d.nome)));
     const sr = semReporte(dia, diaSel);
     const nAl = probs.length + (sr != null ? 1 : 0);

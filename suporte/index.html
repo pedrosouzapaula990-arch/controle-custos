@@ -266,7 +266,7 @@ let ckTarefa=null;
 $("ckTurnos").addEventListener("click",async e=>{
   const b=e.target.closest("button[data-ck]");if(!b)return;
   const t=JSON.parse(decodeURIComponent(b.dataset.ck));
-  const feito=checks.find(c=>c.id===SupCore.ckId(supDia,t.texto));
+  const feito=checks.find(c=>c.id===SupCore.ckId(supDia,t.texto,t.hora));
   if(feito){ // desfazer
     if(b.dataset.conf!=="1"){b.dataset.conf="1";b.textContent="Desmarcar?";setTimeout(()=>{if(b.isConnected){b.dataset.conf="";render()}},3000);return}
     b.disabled=true;
@@ -279,7 +279,7 @@ $("formCk").addEventListener("submit",async e=>{
   e.preventDefault();if(!ckTarefa)return;
   const t=ckTarefa;$("ckSave").disabled=true;
   try{
-    await api("save",{item:{id:SupCore.ckId(supDia,t.texto),tipo:"check",data:supDia,hora:agoraHM(),responsavel:t.turno,fila:0,total:0,status:"feito",
+    await api("save",{item:{id:SupCore.ckId(supDia,t.texto,t.hora),tipo:"check",data:supDia,hora:agoraHM(),responsavel:t.turno,fila:0,total:0,status:"feito",
       dados:JSON.stringify({tarefa:t.texto,prevista:t.hora}),obs:$("ckObs").value.trim(),criadoEm:Date.now()}});
     $("ovCk").classList.remove("open");ckTarefa=null;await loadSup();
   }catch(err){$("ckErr").textContent="Não foi possível salvar: "+err.message}
