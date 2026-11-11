@@ -363,7 +363,7 @@ body.pg-suporte #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794339087"></script>
+<script src="suporte/sup-core.js?v=1794400759"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -796,7 +796,7 @@ async function loadVal(forcar,tent){
   valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
   let retry=false;
   try{const r=await api("validar",{aba:"Suporte",desde:SupCore.infoSaldo(supRecargas).desde||"",forcar:!!forcar&&tent===0});
-    if(!r.consumo)throw new Error("Atualize o Apps Script com o código novo (Code.gs).");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("")}
+    if(!r.consumo)throw new Error("Atualize o Apps Script com o código novo (Code.gs).");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("");if(r.desatualizado)setTimeout(()=>{if(valRes&&valRes.desatualizado)loadVal(false)},60000)}
   catch(e){
     if(tent<4&&!/Atualize/.test(e.message)){retry=true;showSupBanner("Lendo as bases (são muitas linhas, pode levar até 1 minuto)…")}
     else showSupBanner("Erro ao calcular a validação: "+e.message)}

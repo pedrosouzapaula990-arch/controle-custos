@@ -288,7 +288,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794339087"></script>
+<script src="sup-core.js?v=1794400759"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -318,7 +318,7 @@ async function loadVal(forcar,tent){
   valCarregando=true;$("vAtual").disabled=true;$("vAtual").textContent="Calculando…";
   let retry=false;
   try{const r=await api("validar",{desde:SupCore.infoSaldo(recargas).desde||"",forcar:!!forcar&&tent===0});
-    if(!r.consumo)throw new Error("Resposta incompleta do servidor.");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("")}
+    if(!r.consumo)throw new Error("Resposta incompleta do servidor.");valRes=r;if(r.basesUrl)$("vLink").href=r.basesUrl;showSupBanner("");if(r.desatualizado)setTimeout(()=>{if(valRes&&valRes.desatualizado)loadVal(false)},60000)}
   catch(e){
     if(tent<4){retry=true;showSupBanner("Lendo as bases (são muitas linhas, pode levar até 1 minuto)…")}
     else showSupBanner("Erro ao calcular a validação: "+e.message)}

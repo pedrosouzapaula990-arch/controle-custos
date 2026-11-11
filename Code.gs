@@ -137,6 +137,11 @@ function autorizar() {
   Object.keys(ABAS).forEach(aba_);
   const sb = basesSS_();
   Logger.log("Planilha das bases (compartilhe esta com o suporte): " + sb.getUrl());
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === "recalcularSeMudou")) {
+    ScriptApp.newTrigger("recalcularSeMudou").timeBased().everyMinutes(5).create();
+  }
+  recalcularSeMudou();
+  Logger.log("Pronto: o cálculo das bases roda sozinho a cada 5 minutos, só quando as bases mudam.");
 }
 
 // Planilha SEPARADA só com as bases (o suporte tem acesso a ela, não à de custos)
@@ -158,22 +163,33 @@ function basesSS_() {
 const BASES = ["Base Darb Oficial", "Base Motiva"];
 const COLS_BASE = ["ID", "Contato principal", "Etapa do lead", "Data Cadastro", "Data Renovação", "Plano", "Telas", "Servidor", "Vendedor", "Data de Vencimento"];
 
-// Só recalcula quando a planilha das bases é alterada (ou ao clicar em Recalcular).
-// O último resultado fica salvo num arquivo no Drive e volta na hora.
+// O cálculo roda em segundo plano (gatilho a cada 5 min) e só quando a planilha das bases muda.
+// O site só lê o último resultado salvo, então abre na hora. "Recalcular" força o cálculo.
+function versaoAtual_(desde) {
+  const tz = Session.getScriptTimeZone();
+  const mes = Utilities.formatDate(new Date(), tz, "yyyy-MM");
+  const alterada = DriveApp.getFileById(basesSS_().getId()).getLastUpdated();
+  return { versao: alterada.getTime() + "|" + (desde || "") + "|" + mes, alterada: alterada };
+}
+function lerSalvo_() {
+  try { const x = JSON.parse(arquivoCalculo_().getBlob().getDataAsString()); return x && x.out ? x : null; } catch (e) { return null; }
+}
 function validar_(p) {
+  const desde = p.desde || "";
+  const salvo = lerSalvo_();
+  if (!p.forcar && salvo && (salvo.out.desde || "") === desde) {
+    salvo.out.doCache = true;
+    try { salvo.out.desatualizado = salvo.versao !== versaoAtual_(desde).versao; } catch (e) {}
+    return salvo.out;
+  }
+  return calcularESalvar_(desde);
+}
+function calcularESalvar_(desde) {
   const tz = Session.getScriptTimeZone();
   const agora = new Date();
   const hoje = Utilities.formatDate(agora, tz, "yyyy-MM-dd");
   const ss = basesSS_();
-  const alterada = DriveApp.getFileById(ss.getId()).getLastUpdated();
-  const versao = alterada.getTime() + "|" + (p.desde || "") + "|" + hoje.slice(0, 7);
-  const arq = arquivoCalculo_();
-  if (!p.forcar) {
-    try {
-      const salvo = JSON.parse(arq.getBlob().getDataAsString());
-      if (salvo && salvo.versao === versao && salvo.out) { salvo.out.doCache = true; return salvo.out; }
-    } catch (e) {}
-  }
+  const va = versaoAtual_(desde);
   const bases = BASES.map(nome => {
     const sh = ss.getSheetByName(nome);
     if (!sh || sh.getLastRow() < 2) return { nome: nome, head: [], cols: {} };
@@ -186,12 +202,19 @@ function validar_(p) {
     });
     return { nome: nome, head: head, cols: cols, n: n };
   });
-  const out = calcularValidacao(bases, hoje, p.desde || "");
+  const out = calcularValidacao(bases, hoje, desde);
   out.ok = true; out.aba = "Suporte"; out.basesUrl = ss.getUrl();
-  out.basesAlteradas = Utilities.formatDate(alterada, tz, "dd/MM HH:mm");
+  out.basesAlteradas = Utilities.formatDate(va.alterada, tz, "dd/MM HH:mm");
   out.calculadoEm = Utilities.formatDate(agora, tz, "dd/MM HH:mm");
-  try { arq.setContent(JSON.stringify({ versao: versao, out: out })); } catch (e) {}
+  try { arquivoCalculo_().setContent(JSON.stringify({ versao: va.versao, out: out })); } catch (e) {}
   return out;
+}
+// Gatilho (a cada 5 min): recalcula só se as bases mudaram
+function recalcularSeMudou() {
+  const salvo = lerSalvo_();
+  const desde = salvo ? (salvo.out.desde || "") : "";
+  if (salvo && salvo.versao === versaoAtual_(desde).versao) return;
+  calcularESalvar_(desde);
 }
 function arquivoCalculo_() {
   const nome = "ultimo-calculo-validacao.json", pasta = pasta_();

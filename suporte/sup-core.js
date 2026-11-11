@@ -157,7 +157,7 @@ const SupCore = (() => {
     const b = (res.bases || []).map(x => x.vazia ? `<span class="chip problema">${esc(x.nome)}: vazia</span>`
       : x.faltando.length ? `<span class="chip problema">${esc(x.nome)}: faltam colunas ${esc(x.faltando.join(", "))}</span>`
       : `<span class="chip">${esc(x.nome)}: ${x.linhas.toLocaleString("pt-BR")} linhas</span>`).join(" ");
-    const quando = res.basesAlteradas ? `<div class="hint" style="margin-top:6px">Bases alteradas em <b>${esc(res.basesAlteradas)}</b> · cálculo de ${esc(res.calculadoEm || "")}. Só recalcula quando as bases mudarem.</div>` : "";
+    const quando = res.basesAlteradas ? `<div class="hint" style="margin-top:6px">Bases alteradas em <b>${esc(res.basesAlteradas)}</b> · cálculo de ${esc(res.calculadoEm || "")}.${res.desatualizado ? " <b>As bases mudaram: o cálculo novo sai em até 5 min (ou clique em Recalcular).</b>" : " Só recalcula quando as bases mudarem."}</div>` : "";
     return `<div class="chips" style="margin-bottom:4px">${b}</div>${quando}`;
   }
   function filtrarErros(res, marks, f) {
@@ -214,13 +214,14 @@ const SupCore = (() => {
     return (+inf.ultSaldo.total || 0) + inf.somaRecargas - res.consumoDesde;
   }
   function htmlCredito(res, recargas, owner) {
-    const c = res?.consumo; if (!c) return '<div class="empty">Carregando…</div>';
+    const c = res?.consumo; if (!c) return '<div class="empty">Buscando o último cálculo das bases…</div>';
     const saldo = calcSaldo(recargas, res), inf = infoSaldo(recargas);
     const alerta = saldo != null && saldo <= LIMITE;
     const mesNome = new Date(res.mes + "-15").toLocaleDateString("pt-BR", { month: "long" });
     const k = (lbl, val, note, cls) => `<div class="card kpi"><div class="lbl">${lbl}</div><div class="val ${cls || ""}">${val}</div><div class="note">${note || ""}</div></div>`;
     const n = x => (+x || 0).toLocaleString("pt-BR");
-    let html = alerta ? `<div class="banner" style="display:block">⚠️ Saldo de créditos em <b>${n(saldo)}</b>, abaixo do limite de ${LIMITE}. Pedir recarga.</div>` : "";
+    let html = res.basesAlteradas ? `<div class="hint" style="margin-bottom:10px">Bases de ${esc(res.basesAlteradas)} · cálculo de ${esc(res.calculadoEm || "")}${res.desatualizado ? " · <b>atualizando (até 5 min)</b>" : ""}</div>` : "";
+    html += alerta ? `<div class="banner" style="display:block">⚠️ Saldo de créditos em <b>${n(saldo)}</b>, abaixo do limite de ${LIMITE}. Pedir recarga.</div>` : "";
     html += `<div class="kpis">
       ${k("Consumo em " + mesNome, n(c.total), (res.basesAlteradas ? "bases de " + res.basesAlteradas : "créditos até " + res.hoje.split("-").reverse().slice(0, 2).join("/")))}
       ${k("Vendas", n(c.vendas), n(c.linhasVendas) + " cliente(s)")}
