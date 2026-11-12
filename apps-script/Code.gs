@@ -339,7 +339,7 @@ function kommoTudo_(cfg, path, chave) {
   let pag = 1, fim = false;
   while (!fim) {
     const reqs = [];
-    for (let i = 0; i < 6; i++) reqs.push(kommoReq_(cfg, path + (path.indexOf("?") >= 0 ? "&" : "?") + "limit=250&page=" + (pag + i)));
+    for (let i = 0; i < 7; i++) reqs.push(kommoReq_(cfg, path + (path.indexOf("?") >= 0 ? "&" : "?") + "limit=250&page=" + (pag + i)));
     const resps = UrlFetchApp.fetchAll(reqs);
     for (const r of resps) {
       const j = kommoJson_(r);
@@ -348,8 +348,8 @@ function kommoTudo_(cfg, path, chave) {
       out.push.apply(out, itens);
       if (itens.length < 250) { fim = true; break; }
     }
-    pag += 6;
-    if (!fim) Utilities.sleep(1100);
+    pag += 7;
+    if (!fim) Utilities.sleep(1000);
   }
   return out;
 }
@@ -369,7 +369,9 @@ function puxarBasesKommo() {
   const props = PropertiesService.getScriptProperties();
   props.setProperty("KOMMO_PUXANDO", String(Date.now()));
   try {
-    const cfg = kommoCfg_(), tz = Session.getScriptTimeZone(), agora = new Date();
+    const cfg = kommoCfg_(), tz = Session.getScriptTimeZone(), agora = new Date(), t0 = Date.now();
+    const cacheNomes = lerNomesCache_();   // nomes de contatos já conhecidos (não busca de novo)
+    let nomesNovos = 0, nomesPendentes = 0;
     const fmtTs = ts => ts ? Utilities.formatDate(new Date(ts * 1000), tz, "dd.MM.yyyy HH:mm:ss") : "";
     // funis e etapas
     const pipes = kommoTudo_(cfg, "leads/pipelines", "pipelines");
@@ -382,19 +384,24 @@ function puxarBasesKommo() {
     Object.keys(KOMMO_FUNIS).forEach(nomeFunil => {
       const p = pipes.find(x => String(x.name).trim().toLowerCase() === nomeFunil.toLowerCase());
       if (!p) throw new Error("Funil não encontrado no Kommo: " + nomeFunil);
-      const leads = kommoTudo_(cfg, "leads?with=contacts&filter[pipeline_id][]=" + p.id, "leads");
+      // busca só as etapas que interessam (pula DUPLICADOS, que não entram em nenhum cálculo)
+      const etapas = ((p._embedded || {}).statuses || []).filter(st => !/duplicad/i.test(st.name));
+      const filtro = etapas.map((st, i) => "filter[statuses][" + i + "][pipeline_id]=" + p.id + "&filter[statuses][" + i + "][status_id]=" + st.id).join("&");
+      const leads = kommoTudo_(cfg, "leads?with=contacts&" + filtro, "leads");
       // nomes dos contatos principais
       const idsCont = [];
       leads.forEach(l => { const c = ((l._embedded || {}).contacts || []); const m = c.find(x => x.is_main) || c[0]; if (m) idsCont.push(m.id); });
-      const nomes = {};
+      const nomes = cacheNomes;
+      const faltam = idsCont.filter(id => !(id in nomes));
       const LOTE = 80; // a URL do UrlFetch tem limite de ~2 KB
-      for (let i = 0; i < idsCont.length; i += LOTE * 6) {
+      for (let i = 0; i < faltam.length; i += LOTE * 7) {
+        if (Date.now() - t0 > 3.5 * 60 * 1000) { nomesPendentes += faltam.length - i; break; } // deixa o resto para a próxima puxada
         const reqs = [];
-        for (let k = i; k < Math.min(i + LOTE * 6, idsCont.length); k += LOTE) {
-          reqs.push(kommoReq_(cfg, "contacts?limit=250&" + idsCont.slice(k, k + LOTE).map(id => "filter[id][]=" + id).join("&")));
+        for (let k = i; k < Math.min(i + LOTE * 7, faltam.length); k += LOTE) {
+          reqs.push(kommoReq_(cfg, "contacts?limit=250&" + faltam.slice(k, k + LOTE).map(id => "filter[id][]=" + id).join("&")));
         }
-        UrlFetchApp.fetchAll(reqs).forEach(r => { const j = kommoJson_(r); ((j && j._embedded && j._embedded.contacts) || []).forEach(c => nomes[c.id] = c.name); });
-        Utilities.sleep(1100);
+        UrlFetchApp.fetchAll(reqs).forEach(r => { const j = kommoJson_(r); ((j && j._embedded && j._embedded.contacts) || []).forEach(c => { nomes[c.id] = c.name; nomesNovos++; }); });
+        Utilities.sleep(1000);
       }
       const linhas = leads.map(l => {
         const cf = {};
@@ -420,6 +427,9 @@ function puxarBasesKommo() {
       pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
       resumo.push(nomeAba + ": " + linhas.length + " leads");
     });
+    if (nomesNovos) salvarNomesCache_(cacheNomes);
+    if (nomesPendentes) resumo.push(nomesPendentes + " nomes de contato ficam para a próxima puxada");
+    resumo.push("tempo: " + Math.round((Date.now() - t0) / 1000) + "s");
     props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
     props.setProperty("KOMMO_ERRO", "");
     // recalcula na hora com a base nova
@@ -436,6 +446,13 @@ function puxarBasesKommo() {
     lock.releaseLock();
   }
 }
+function arquivoNomes_() {
+  const nome = "nomes-contatos-kommo.json", pasta = pastaFotos_();
+  const it = pasta.getFilesByName(nome);
+  return it.hasNext() ? it.next() : pasta.createFile(nome, "{}", "application/json");
+}
+function lerNomesCache_() { try { return JSON.parse(arquivoNomes_().getBlob().getDataAsString()) || {}; } catch (e) { return {}; } }
+function salvarNomesCache_(m) { try { arquivoNomes_().setContent(JSON.stringify(m)); } catch (e) {} }
 function pastaFotos_() {
   const it = DriveApp.getFoldersByName(PASTA_FOTOS);
   return it.hasNext() ? it.next() : DriveApp.createFolder(PASTA_FOTOS);
