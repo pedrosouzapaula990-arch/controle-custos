@@ -362,89 +362,164 @@ function fmtCampo_(cf, tz) {
   return vals.join(", ");
 }
 
-// Puxa as duas bases. Pode ser chamada pelo gatilho, pelo editor ou pelo botão "Atualizar agora" do site.
-function puxarBasesKommo() {
+// Puxa as duas bases EM PARTES: trabalha até ~4 min, salva onde parou e continua sozinha 1 min depois.
+// Pode ser chamada pelo gatilho, pelo editor ou pelo botão "Puxar do Kommo" do site.
+const KOMMO_ORCAMENTO_MS = 4 * 60 * 1000;
+function puxarBasesKommo() { return rodarKommo_(false); }
+function continuarKommo() { return rodarKommo_(true); }
+
+function rodarKommo_(continuacao) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: true, jaRodando: true };
   const props = PropertiesService.getScriptProperties();
-  props.setProperty("KOMMO_PUXANDO", String(Date.now()));
+  const t0 = Date.now(), tz = Session.getScriptTimeZone();
+  let job = null;
   try {
-    const cfg = kommoCfg_(), tz = Session.getScriptTimeZone(), agora = new Date(), t0 = Date.now();
-    const cacheNomes = lerNomesCache_();   // nomes de contatos já conhecidos (não busca de novo)
-    let nomesNovos = 0, nomesPendentes = 0;
-    const fmtTs = ts => ts ? Utilities.formatDate(new Date(ts * 1000), tz, "dd.MM.yyyy HH:mm:ss") : "";
-    // funis e etapas
-    const pipes = kommoTudo_(cfg, "leads/pipelines", "pipelines");
-    const etapa = {}, funilNome = {};
-    pipes.forEach(p => { funilNome[p.id] = p.name; ((p._embedded || {}).statuses || []).forEach(s => etapa[p.id + ":" + s.id] = s.name); });
-    // usuários
-    const usuarios = {};
-    kommoTudo_(cfg, "users", "users").forEach(u => usuarios[u.id] = u.name);
-    const sb = basesSS_(), resumo = [];
-    Object.keys(KOMMO_FUNIS).forEach(nomeFunil => {
-      const p = pipes.find(x => String(x.name).trim().toLowerCase() === nomeFunil.toLowerCase());
-      if (!p) throw new Error("Funil não encontrado no Kommo: " + nomeFunil);
-      // busca só as etapas que interessam (pula DUPLICADOS, que não entram em nenhum cálculo)
-      const etapas = ((p._embedded || {}).statuses || []).filter(st => !/duplicad/i.test(st.name));
-      const filtro = etapas.map((st, i) => "filter[statuses][" + i + "][pipeline_id]=" + p.id + "&filter[statuses][" + i + "][status_id]=" + st.id).join("&");
-      const leads = kommoTudo_(cfg, "leads?with=contacts&" + filtro, "leads");
-      // nomes dos contatos principais
-      const idsCont = [];
-      leads.forEach(l => { const c = ((l._embedded || {}).contacts || []); const m = c.find(x => x.is_main) || c[0]; if (m) idsCont.push(m.id); });
-      const nomes = cacheNomes;
-      const faltam = idsCont.filter(id => !(id in nomes));
-      const LOTE = 80; // a URL do UrlFetch tem limite de ~2 KB
-      for (let i = 0; i < faltam.length; i += LOTE * 7) {
-        if (Date.now() - t0 > 3.5 * 60 * 1000) { nomesPendentes += faltam.length - i; break; } // deixa o resto para a próxima puxada
-        const reqs = [];
-        for (let k = i; k < Math.min(i + LOTE * 7, faltam.length); k += LOTE) {
-          reqs.push(kommoReq_(cfg, "contacts?limit=250&" + faltam.slice(k, k + LOTE).map(id => "filter[id][]=" + id).join("&")));
-        }
-        UrlFetchApp.fetchAll(reqs).forEach(r => { const j = kommoJson_(r); ((j && j._embedded && j._embedded.contacts) || []).forEach(c => { nomes[c.id] = c.name; nomesNovos++; }); });
-        Utilities.sleep(1000);
-      }
-      const linhas = leads.map(l => {
-        const cf = {};
-        (l.custom_fields_values || []).forEach(f => cf[String(f.field_name).trim()] = fmtCampo_(f, tz));
-        const c = ((l._embedded || {}).contacts || []); const m = c.find(x => x.is_main) || c[0];
-        const base = {
-          "ID": l.id, "Contato principal": m ? (nomes[m.id] || "") : "", "Etapa do lead": etapa[l.pipeline_id + ":" + l.status_id] || "",
-          "Funil de vendas": funilNome[l.pipeline_id] || "", "Lead usuário responsável": usuarios[l.responsible_user_id] || "",
-          "Data Criada": fmtTs(l.created_at), "Última modificação": fmtTs(l.updated_at), "Modificado por": usuarios[l.updated_by] || "",
-          "Venda": l.price || 0
-        };
-        return COLS_EXPORT.map(col => col in base ? base[col] : (cf[col] || ""));
+    // remove gatilhos de continuação antigos
+    ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "continuarKommo").forEach(t => ScriptApp.deleteTrigger(t));
+    job = lerJob_();
+    if (job && !continuacao && Date.now() - job.inicio > 30 * 60 * 1000) job = null; // job velho/travado: recomeça
+    if (job && !continuacao) { agendarContinuacao_(); return { ok: true, jaRodando: true, job: resumoJob_(job) }; }
+    const cfg = kommoCfg_();
+    if (!job) job = novoJob_(cfg);
+    props.setProperty("KOMMO_PUXANDO", String(Date.now()));
+    const sb = basesSS_(), cache = lerNomesCache_();
+    let nomesNovos = 0;
+    const tempo = () => Date.now() - t0 < KOMMO_ORCAMENTO_MS;
+
+    // FASE 1: leads, página a página, gravando numa aba temporária
+    while (job.fase === "leads" && tempo()) {
+      const f = job.funis[job.i];
+      if (!f) { job.fase = "nomes"; break; }
+      const reqs = [];
+      for (let k = 0; k < 5; k++) reqs.push(kommoReq_(cfg, "leads?with=contacts&limit=250&page=" + (f.pag + k) + "&" + f.filtro));
+      let acabou = false; const linhas = [];
+      UrlFetchApp.fetchAll(reqs).forEach(r => {
+        if (acabou) return;
+        const j = kommoJson_(r), itens = (j && j._embedded && j._embedded.leads) || [];
+        itens.forEach(l => linhas.push(linhaLead_(l, job, tz)));
+        if (itens.length < 250) acabou = true;
       });
-      // grava a base mais recente (substitui a anterior) em texto puro
-      const nomeAba = KOMMO_FUNIS[nomeFunil];
-      const sh = sb.getSheetByName(nomeAba) || sb.insertSheet(nomeAba);
-      sh.clearContents();
-      const dados = [COLS_EXPORT].concat(linhas);
-      sh.getRange(1, 1, dados.length, COLS_EXPORT.length).setNumberFormat("@").setValues(dados.map(r => r.map(v => String(v))));
-      // foto datada no Drive (CSV compactado)
-      const csv = dados.map(r => r.map(v => { v = String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";")).join("\n");
-      const nomeArq = Utilities.formatDate(agora, tz, "yyyy-MM-dd_HHmm") + " - " + nomeAba + ".csv";
-      pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
-      resumo.push(nomeAba + ": " + linhas.length + " leads");
-    });
-    if (nomesNovos) salvarNomesCache_(cacheNomes);
-    if (nomesPendentes) resumo.push(nomesPendentes + " nomes de contato ficam para a próxima puxada");
-    resumo.push("tempo: " + Math.round((Date.now() - t0) / 1000) + "s");
-    props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
-    props.setProperty("KOMMO_ERRO", "");
-    // recalcula na hora com a base nova
-    const salvo = lerSalvo_();
-    calcularESalvar_(salvo ? (salvo.out.desde || "") : "");
-    Logger.log("Kommo OK — " + resumo.join(" | "));
-    return { ok: true, resumo: resumo };
+      if (linhas.length) {
+        const sh = abaTemp_(sb, f.aba);
+        sh.getRange(sh.getLastRow() + 1, 1, linhas.length, COLS_EXPORT.length + 1).setNumberFormat("@").setValues(linhas);
+        f.n += linhas.length;
+      }
+      f.pag += 5;
+      if (acabou) job.i++;
+      salvarJob_(job);
+      Utilities.sleep(800);
+    }
+
+    // FASE 2: nomes dos contatos que ainda não conhecemos
+    if (job.fase === "nomes") {
+      const faltam = [];
+      job.funis.forEach(f => {
+        const sh = sb.getSheetByName("_tmp " + f.aba);
+        if (!sh || sh.getLastRow() < 1) return;
+        sh.getRange(1, COLS_EXPORT.length + 1, sh.getLastRow(), 1).getValues().forEach(r => { const id = String(r[0]); if (id && !(id in cache)) faltam.push(id); });
+      });
+      const unicos = [...new Set(faltam)], LOTE = 80;
+      for (let i = 0; i < unicos.length && tempo(); i += LOTE * 6) {
+        const reqs = [];
+        for (let k = i; k < Math.min(i + LOTE * 6, unicos.length); k += LOTE)
+          reqs.push(kommoReq_(cfg, "contacts?limit=250&" + unicos.slice(k, k + LOTE).map(id => "filter[id][]=" + id).join("&")));
+        UrlFetchApp.fetchAll(reqs).forEach(r => { const j = kommoJson_(r); ((j && j._embedded && j._embedded.contacts) || []).forEach(c => { cache[c.id] = c.name; nomesNovos++; }); });
+        unicos.slice(i, i + LOTE * 6).forEach(id => { if (!(id in cache)) cache[id] = ""; }); // não procura de novo quem não existe
+        Utilities.sleep(900);
+      }
+      if (nomesNovos) salvarNomesCache_(cache);
+      if (unicos.every(id => id in cache)) job.fase = "finalizar";
+      salvarJob_(job);
+    }
+
+    // FASE 3: troca as bases, guarda a foto no Drive e recalcula
+    if (job.fase === "finalizar" && Date.now() - t0 < 2.5 * 60 * 1000) {
+      const agora = new Date(), resumo = [];
+      const iNome = COLS_EXPORT.indexOf("Contato principal");
+      job.funis.forEach(f => {
+        const tmp = sb.getSheetByName("_tmp " + f.aba);
+        const dadosTmp = tmp && tmp.getLastRow() ? tmp.getRange(1, 1, tmp.getLastRow(), COLS_EXPORT.length + 1).getValues() : [];
+        const linhas = dadosTmp.map(r => { const c = r.slice(0, COLS_EXPORT.length).map(String); c[iNome] = cache[String(r[COLS_EXPORT.length])] || ""; return c; });
+        const sh = sb.getSheetByName(f.aba) || sb.insertSheet(f.aba);
+        sh.clearContents();
+        const dados = [COLS_EXPORT].concat(linhas);
+        sh.getRange(1, 1, dados.length, COLS_EXPORT.length).setNumberFormat("@").setValues(dados);
+        const csv = dados.map(r => r.map(v => { v = String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";")).join("\n");
+        const nomeArq = Utilities.formatDate(agora, tz, "yyyy-MM-dd_HHmm") + " - " + f.aba + ".csv";
+        pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
+        if (tmp) sb.deleteSheet(tmp);
+        resumo.push(f.aba + ": " + linhas.length + " leads");
+      });
+      apagarJob_();
+      props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
+      props.setProperty("KOMMO_ERRO", "");
+      props.deleteProperty("KOMMO_PUXANDO");
+      const salvo = lerSalvo_();
+      calcularESalvar_(salvo ? (salvo.out.desde || "") : "");
+      Logger.log("Kommo OK — " + resumo.join(" | ") + " | total " + Math.round((Date.now() - job.inicio) / 1000) + "s");
+      return { ok: true, resumo: resumo };
+    }
+
+    // ainda não acabou: continua sozinho em 1 minuto
+    agendarContinuacao_();
+    Logger.log("Kommo em andamento: " + resumoJob_(job) + " — continua sozinho em 1 min.");
+    return { ok: true, continua: true, job: resumoJob_(job) };
   } catch (e) {
     props.setProperty("KOMMO_ERRO", String(e.message || e));
+    props.deleteProperty("KOMMO_PUXANDO");
     Logger.log("Erro ao puxar o Kommo: " + e);
     return { ok: false, error: String(e.message || e) };
   } finally {
-    props.deleteProperty("KOMMO_PUXANDO");
     lock.releaseLock();
   }
+}
+function novoJob_(cfg) {
+  const pipes = kommoTudo_(cfg, "leads/pipelines", "pipelines");
+  const etapa = {}, funil = {}, usuarios = {};
+  pipes.forEach(p => { funil[p.id] = p.name; ((p._embedded || {}).statuses || []).forEach(s => etapa[p.id + ":" + s.id] = s.name); });
+  kommoTudo_(cfg, "users", "users").forEach(u => usuarios[u.id] = u.name);
+  const sb = basesSS_();
+  const funis = Object.keys(KOMMO_FUNIS).map(nomeFunil => {
+    const p = pipes.find(x => String(x.name).trim().toLowerCase() === nomeFunil.toLowerCase());
+    if (!p) throw new Error("Funil não encontrado no Kommo: " + nomeFunil);
+    // pula a etapa DUPLICADOS
+    const etapas = ((p._embedded || {}).statuses || []).filter(st => !/duplicad/i.test(st.name));
+    const filtro = etapas.map((st, i) => "filter[statuses][" + i + "][pipeline_id]=" + p.id + "&filter[statuses][" + i + "][status_id]=" + st.id).join("&");
+    const aba = KOMMO_FUNIS[nomeFunil];
+    const tmp = sb.getSheetByName("_tmp " + aba); if (tmp) sb.deleteSheet(tmp);
+    sb.insertSheet("_tmp " + aba).hideSheet();
+    return { aba: aba, filtro: filtro, pag: 1, n: 0 };
+  });
+  const job = { inicio: Date.now(), fase: "leads", i: 0, funis: funis, etapa: etapa, funil: funil, usuarios: usuarios };
+  salvarJob_(job);
+  return job;
+}
+function linhaLead_(l, job, tz) {
+  const fmtTs = ts => ts ? Utilities.formatDate(new Date(ts * 1000), tz, "dd.MM.yyyy HH:mm:ss") : "";
+  const cf = {};
+  (l.custom_fields_values || []).forEach(f => cf[String(f.field_name).trim()] = fmtCampo_(f, tz));
+  const c = ((l._embedded || {}).contacts || []), m = c.find(x => x.is_main) || c[0];
+  const base = {
+    "ID": l.id, "Contato principal": "", "Etapa do lead": job.etapa[l.pipeline_id + ":" + l.status_id] || "",
+    "Funil de vendas": job.funil[l.pipeline_id] || "", "Lead usuário responsável": job.usuarios[l.responsible_user_id] || "",
+    "Data Criada": fmtTs(l.created_at), "Última modificação": fmtTs(l.updated_at), "Modificado por": job.usuarios[l.updated_by] || "",
+    "Venda": l.price || 0
+  };
+  return COLS_EXPORT.map(col => String(col in base ? base[col] : (cf[col] || ""))).concat([m ? String(m.id) : ""]);
+}
+function abaTemp_(sb, aba) { return sb.getSheetByName("_tmp " + aba) || sb.insertSheet("_tmp " + aba); }
+function arquivoJob_() {
+  const nome = "kommo-andamento.json", pasta = pastaFotos_(), it = pasta.getFilesByName(nome);
+  return it.hasNext() ? it.next() : pasta.createFile(nome, "", "application/json");
+}
+function lerJob_() { try { const t = arquivoJob_().getBlob().getDataAsString(); return t ? JSON.parse(t) : null; } catch (e) { return null; } }
+function salvarJob_(job) { arquivoJob_().setContent(JSON.stringify(job)); }
+function apagarJob_() { arquivoJob_().setContent(""); }
+function agendarContinuacao_() { ScriptApp.newTrigger("continuarKommo").timeBased().after(60 * 1000).create(); }
+function resumoJob_(job) {
+  const fase = { leads: "buscando leads", nomes: "buscando nomes dos contatos", finalizar: "salvando" }[job.fase] || job.fase;
+  return fase + " (" + job.funis.map(f => f.aba.replace("Base ", "") + ": " + f.n.toLocaleString("pt-BR")).join(", ") + ")";
 }
 function arquivoNomes_() {
   const nome = "nomes-contatos-kommo.json", pasta = pastaFotos_();
@@ -459,15 +534,17 @@ function pastaFotos_() {
 }
 function statusKommo_() {
   const pr = PropertiesService.getScriptProperties();
-  const puxando = +pr.getProperty("KOMMO_PUXANDO") || 0;
+  const job = lerJob_();
   return { ok: true, configurado: !!(pr.getProperty("KOMMO_SUBDOMINIO") && pr.getProperty("KOMMO_TOKEN")),
-    puxando: puxando && Date.now() - puxando < 6 * 60 * 1000, ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "" };
+    puxando: !!job && Date.now() - job.inicio < 30 * 60 * 1000, andamento: job ? resumoJob_(job) : "",
+    ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "" };
 }
 
 // Rode 1x pelo editor depois de preencher as Propriedades do script:
 // cria os gatilhos (início do dia e antes de cada validação) e faz a primeira puxada.
 function configurarKommo() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "puxarBasesKommo").forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().filter(t => ["puxarBasesKommo", "continuarKommo"].includes(t.getHandlerFunction())).forEach(t => ScriptApp.deleteTrigger(t));
+  apagarJob_();
   [[7, 0], [12, 30], [19, 45]].forEach(([h, m]) => ScriptApp.newTrigger("puxarBasesKommo").timeBased().everyDays(1).atHour(h).nearMinute(m).create());
   const r = puxarBasesKommo();
   Logger.log(JSON.stringify(r));

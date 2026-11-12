@@ -160,7 +160,7 @@ const SupCore = (() => {
     const quando = res.basesAlteradas ? `<div class="hint" style="margin-top:6px">Bases alteradas em <b>${esc(res.basesAlteradas)}</b> · cálculo de ${esc(res.calculadoEm || "")}.${res.desatualizado ? " <b>As bases mudaram: o cálculo novo sai em até 5 min (ou clique em Recalcular).</b>" : " Só recalcula quando as bases mudarem."}</div>` : "";
     const k = res.kommo;
     const kom = !k ? "" : !k.configurado ? `<div class="hint" style="margin-top:4px">Kommo: ainda não configurado (as bases vêm coladas na planilha).</div>`
-      : `<div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora…</b>" : "última puxada " + esc(k.ultima || "—")} · automático às 7h, 12h30 e 19h45${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
+      : `<div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora" + (k.andamento ? ": " + esc(k.andamento) : "") + "…</b>" : "última puxada " + esc(k.ultima || "—")} · automático às 7h, 12h30 e 19h45${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
     return `<div class="chips" style="margin-bottom:4px">${b}</div>${quando}${kom}`;
   }
   function filtrarErros(res, marks, f) {
@@ -245,17 +245,18 @@ const SupCore = (() => {
 
   // Botão "Puxar do Kommo": dispara e acompanha até terminar (a puxada leva ~1-2 min)
   async function puxarKommo(api, btn, aviso, depois) {
-    btn.disabled = true; btn.textContent = "Puxando do Kommo…"; aviso("Puxando as bases do Kommo. Leva 1 a 2 minutos…");
+    btn.disabled = true; btn.textContent = "Puxando do Kommo…"; aviso("Puxando as bases do Kommo. Pode levar alguns minutos (ele trabalha em partes)…");
     try { await api("puxarKommo"); } catch (e) { /* pode estourar o tempo da requisição; a puxada continua no servidor */ }
     const t0 = Date.now();
     const espera = async () => {
       let st = null; try { st = await api("kommoStatus"); } catch (e) {}
+      if (st && st.puxando && st.andamento) aviso("Puxando do Kommo: " + st.andamento + "…");
       if (st && !st.puxando) {
         btn.disabled = false; btn.textContent = "⇣ Puxar do Kommo";
         aviso(st.erro ? "Erro ao puxar do Kommo: " + st.erro : "");
         depois(); return;
       }
-      if (Date.now() - t0 > 8 * 60 * 1000) { btn.disabled = false; btn.textContent = "⇣ Puxar do Kommo"; aviso("A puxada está demorando. Tente recarregar em alguns minutos."); return; }
+      if (Date.now() - t0 > 25 * 60 * 1000) { btn.disabled = false; btn.textContent = "⇣ Puxar do Kommo"; aviso("A puxada está demorando. Tente recarregar em alguns minutos."); return; }
       setTimeout(espera, 10000);
     };
     setTimeout(espera, 5000);
