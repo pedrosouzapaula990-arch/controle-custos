@@ -472,6 +472,7 @@ function kommoTudo_(cfg, path, chave) {
   }
   return out;
 }
+const normNome_ = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 function fmtCampo_(cf, tz) {
   const vals = (cf.values || []).map(v => v.value).filter(v => v !== null && v !== undefined && v !== "");
   if (!vals.length) return "";
@@ -581,7 +582,8 @@ function rodarKommo_(continuacao) {
         resumo.push(f.aba + ": " + linhas.length + " leads");
         // conferência: tudo que o Kommo entregou foi gravado? (as etapas fechadas e duplicadas já nem são pedidas)
         const gravadas = Math.max(0, sh.getLastRow() - 1);
-        conf.push({ aba: f.aba, buscados: dadosTmp.length, gravados: gravadas, esperados: linhas.length, ok: dadosTmp.length > 0 && gravadas === linhas.length && linhas.length === dadosTmp.length });
+        const vazias = COLS_BASE.concat(COLS_OPC).filter(c => { const ix = COLS_EXPORT.indexOf(c); return ix >= 0 && linhas.length > 50 && !linhas.some(r => String(r[ix] || "").trim() !== ""); });
+        conf.push({ vazias: vazias, aba: f.aba, buscados: dadosTmp.length, gravados: gravadas, esperados: linhas.length, ok: dadosTmp.length > 0 && gravadas === linhas.length && linhas.length === dadosTmp.length });
       });
       // Venda ganha não deve ter clientes: guarda os que aparecerem para virar alerta (só a 1ª página, 1 chamada por funil)
       try {
@@ -597,7 +599,9 @@ function rodarKommo_(continuacao) {
       apagarJob_();
       props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
       const completa = conf.length === job.funis.length && conf.every(x => x.ok);
+      const colVazias = conf.filter(x => x.vazias.length).map(x => x.aba + ": " + x.vazias.join(", "));
       props.setProperty("KOMMO_CONF", JSON.stringify({ quando: Utilities.formatDate(agora, tz, "dd/MM HH:mm"), completa: completa,
+        colunasVazias: colVazias.join(" | "), campos: Object.keys(job.campos || {}).slice(0, 80).join(", "),
         detalhe: completa ? "" : conf.filter(x => !x.ok).map(x => x.aba + ": Kommo entregou " + x.buscados + ", gravados " + x.gravados).join(" | ") || "alguma base não foi puxada" }));
       props.setProperty("KOMMO_ERRO", "");
       props.deleteProperty("KOMMO_PUXANDO");
@@ -640,7 +644,7 @@ function novoJob_(cfg) {
   });
   const fechadas = [];
   pipes.forEach(p => ((p._embedded || {}).statuses || []).forEach(st => { if (st.id === 142 || st.id === 143) fechadas.push(String(st.name)); }));
-  const job = { inicio: Date.now(), fase: "leads", i: 0, funis: funis, etapa: etapa, funil: funil, usuarios: usuarios, fechadas: fechadas };
+  const job = { campos: {}, inicio: Date.now(), fase: "leads", i: 0, funis: funis, etapa: etapa, funil: funil, usuarios: usuarios, fechadas: fechadas };
   salvarJob_(job);
   return job;
 }
@@ -649,7 +653,8 @@ function linhaLead_(l, job, tz) {
   const cf = {};
   (l.custom_fields_values || []).forEach(f => {
     // se dois campos tiverem o mesmo nome, o vazio não pode apagar o preenchido
-    const k = String(f.field_name).trim(), val = fmtCampo_(f, tz);
+    const k = normNome_(f.field_name), val = fmtCampo_(f, tz);
+    if (job.campos) job.campos[String(f.field_name).trim()] = 1;
     if (val !== "" || !(k in cf)) cf[k] = val;
   });
   const c = ((l._embedded || {}).contacts || []), m = c.find(x => x.is_main) || c[0];
@@ -659,7 +664,7 @@ function linhaLead_(l, job, tz) {
     "Data Criada": fmtTs(l.created_at), "Última modificação": fmtTs(l.updated_at), "Modificado por": job.usuarios[l.updated_by] || "",
     "Venda": l.price || 0
   };
-  return COLS_EXPORT.map(col => String(col in base ? base[col] : (cf[col] || ""))).concat([m ? String(m.id) : ""]);
+  return COLS_EXPORT.map(col => String(col in base ? base[col] : (cf[normNome_(col)] || ""))).concat([m ? String(m.id) : ""]);
 }
 function abaTemp_(sb, aba) { return sb.getSheetByName("_tmp " + aba) || sb.insertSheet("_tmp " + aba); }
 function arquivoJob_() {
