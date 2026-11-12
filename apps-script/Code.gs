@@ -382,6 +382,10 @@ function rodarKommo_(continuacao) {
     if (job && !continuacao) { agendarContinuacao_(); return { ok: true, jaRodando: true, job: resumoJob_(job) }; }
     const cfg = kommoCfg_();
     if (!job) job = novoJob_(cfg);
+    // trava de segurança: no máximo 12 partes por puxada (evita gastar a cota diária do Google)
+    job.partes = (job.partes || 0) + 1;
+    if (job.partes > 12) { apagarJob_(); throw new Error("Puxada cancelada: passou de 12 partes. Avise para investigar."); }
+    salvarJob_(job);
     props.setProperty("KOMMO_PUXANDO", String(Date.now()));
     const sb = basesSS_(), cache = lerNomesCache_();
     let nomesNovos = 0;
