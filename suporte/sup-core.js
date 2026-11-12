@@ -160,7 +160,9 @@ const SupCore = (() => {
     const quando = res.basesAlteradas ? `<div class="hint" style="margin-top:6px">Bases alteradas em <b>${esc(res.basesAlteradas)}</b> · cálculo de ${esc(res.calculadoEm || "")}.${res.desatualizado ? " <b>As bases mudaram: o cálculo novo sai em até 5 min (ou clique em Recalcular).</b>" : " Só recalcula quando as bases mudarem."}</div>` : "";
     const k = res.kommo;
     const kom = !k ? "" : !k.configurado ? `<div class="hint" style="margin-top:4px">Kommo: ainda não configurado (as bases vêm coladas na planilha).</div>`
-      : `<div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora" + (k.andamento ? ": " + esc(k.andamento) : "") + "…</b>" : "última puxada " + esc(k.ultima || "—")} · automático às 7h, 12h30 e 19h45${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
+      : `${(function () { const c = k.conferencia; if (!c) return `<div class="hint" style="margin-top:6px"><span class="chip andamento">Extração</span> sem conferência ainda (aparece na próxima puxada do Kommo)</div>`;
+        return `<div class="hint" style="margin-top:6px"><span class="chip ${c.completa ? "concluido" : "problema"}">${c.completa ? "✔ Extração completa" : "✖ Extração incompleta"}</span> extraída em <b>${esc(c.quando)}</b> · ativos e vencidos${c.completa ? " 100% gravados" : ": " + esc(c.detalhe)}</div>`; })()}
+      <div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora" + (k.andamento ? ": " + esc(k.andamento) : "") + "…</b>" : "última puxada " + esc(k.ultima || "—")} · automático às 7h, 12h30 e 19h45${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
     return `<div class="chips" style="margin-bottom:4px">${b}</div>${quando}${kom}`;
   }
   function filtrarErros(res, marks, f) {

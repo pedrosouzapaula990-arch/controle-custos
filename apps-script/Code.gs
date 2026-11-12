@@ -558,7 +558,7 @@ function rodarKommo_(continuacao) {
 
     // FASE 3: troca as bases, guarda a foto no Drive e recalcula
     if (job.fase === "finalizar" && Date.now() - t0 < 2.5 * 60 * 1000) {
-      const agora = new Date(), resumo = [];
+      const agora = new Date(), resumo = [], conf = [];
       const iNome = COLS_EXPORT.indexOf("Contato principal");
       job.funis.forEach(f => {
         const tmp = sb.getSheetByName("_tmp " + f.aba);
@@ -579,6 +579,9 @@ function rodarKommo_(continuacao) {
         pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
         if (tmp) sb.deleteSheet(tmp);
         resumo.push(f.aba + ": " + linhas.length + " leads");
+        // conferência: tudo que o Kommo entregou foi gravado? (as etapas fechadas e duplicadas já nem são pedidas)
+        const gravadas = Math.max(0, sh.getLastRow() - 1);
+        conf.push({ aba: f.aba, buscados: dadosTmp.length, gravados: gravadas, esperados: linhas.length, ok: dadosTmp.length > 0 && gravadas === linhas.length && linhas.length === dadosTmp.length });
       });
       // Venda ganha não deve ter clientes: guarda os que aparecerem para virar alerta (só a 1ª página, 1 chamada por funil)
       try {
@@ -593,6 +596,9 @@ function rodarKommo_(continuacao) {
       } catch (e) { Logger.log("Venda ganha: " + e); }
       apagarJob_();
       props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
+      const completa = conf.length === job.funis.length && conf.every(x => x.ok);
+      props.setProperty("KOMMO_CONF", JSON.stringify({ quando: Utilities.formatDate(agora, tz, "dd/MM HH:mm"), completa: completa,
+        detalhe: completa ? "" : conf.filter(x => !x.ok).map(x => x.aba + ": Kommo entregou " + x.buscados + ", gravados " + x.gravados).join(" | ") || "alguma base não foi puxada" }));
       props.setProperty("KOMMO_ERRO", "");
       props.deleteProperty("KOMMO_PUXANDO");
       const salvo = lerSalvo_();
@@ -680,7 +686,8 @@ function statusKommo_() {
   const job = lerJob_();
   return { ok: true, configurado: !!(pr.getProperty("KOMMO_SUBDOMINIO") && pr.getProperty("KOMMO_TOKEN")),
     puxando: !!job && Date.now() - job.inicio < 30 * 60 * 1000, andamento: job ? resumoJob_(job) : "",
-    ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "" };
+    ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "",
+    conferencia: (function () { try { return JSON.parse(pr.getProperty("KOMMO_CONF") || "null"); } catch (e) { return null; } })() };
 }
 
 // Rode 1x pelo editor depois de preencher as Propriedades do script:
