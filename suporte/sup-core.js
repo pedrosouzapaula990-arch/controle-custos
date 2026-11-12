@@ -186,7 +186,9 @@ const SupCore = (() => {
       vendErros: all.filter(e => e.marca?.status === "vendedor").length };
   }
   function htmlListaValidacao(lista, interativo, limite) {
-    if (!lista.length) return '<div class="empty">Nada para mostrar com esses filtros. 🎉</div>';
+    const nL = lista.length, nErro = lista.filter(e => e.nivel === "erro").length;
+    const cont = `<div class="hint" style="padding:4px 0 10px"><b>${nL.toLocaleString("pt-BR")}</b> lead${nL === 1 ? "" : "s"} nesta lista${nL ? ` · ${nErro.toLocaleString("pt-BR")} erro(s) · ${(nL - nErro).toLocaleString("pt-BR")} alerta(s)` : ""}</div>`;
+    if (!lista.length) return cont + '<div class="empty">Nada para mostrar com esses filtros. 🎉</div>';
     const rows = lista.slice(0, limite || 300).map(e => {
       const m = e.marca, st = m ? VST[m.status] || { t: m.status, cls: "" } : null;
       const btn = interativo ? `<button type="button" data-vt="${esc(e.vid)}">${m ? "Alterar" : "Tratar"}</button>` : "";
@@ -200,7 +202,7 @@ const SupCore = (() => {
         </div><div class="actions">${btn}</div></div>`;
     }).join("");
     const mais = lista.length > (limite || 300) ? `<div class="hint" style="padding:8px 0">Mostrando ${limite || 300} de ${lista.length}. Use os filtros para ver o resto.</div>` : "";
-    return rows + mais;
+    return cont + rows + mais;
   }
   function htmlPorVendedor(res, marks) {
     const all = filtrarErros(res, marks, {}).filter(e => e.nivel === "erro" || e.marca?.status === "vendedor");
