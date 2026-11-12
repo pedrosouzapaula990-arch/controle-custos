@@ -647,7 +647,11 @@ function novoJob_(cfg) {
 function linhaLead_(l, job, tz) {
   const fmtTs = ts => ts ? Utilities.formatDate(new Date(ts * 1000), tz, "dd.MM.yyyy HH:mm:ss") : "";
   const cf = {};
-  (l.custom_fields_values || []).forEach(f => cf[String(f.field_name).trim()] = fmtCampo_(f, tz));
+  (l.custom_fields_values || []).forEach(f => {
+    // se dois campos tiverem o mesmo nome, o vazio não pode apagar o preenchido
+    const k = String(f.field_name).trim(), val = fmtCampo_(f, tz);
+    if (val !== "" || !(k in cf)) cf[k] = val;
+  });
   const c = ((l._embedded || {}).contacts || []), m = c.find(x => x.is_main) || c[0];
   const base = {
     "ID": l.id, "Contato principal": "", "Etapa do lead": job.etapa[l.pipeline_id + ":" + l.status_id] || "",
