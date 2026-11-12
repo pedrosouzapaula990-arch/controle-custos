@@ -209,6 +209,11 @@ function calcularESalvar_(desde) {
   const out = calcularValidacao(bases, hoje, desde);
   try { out.ativos.movimento = fotoAtivos_(hoje, out._ids, tz); } catch (e) { out.ativos.movimentoErro = String(e.message || e); }
   delete out._ids;
+  try {
+    const vg = JSON.parse(PropertiesService.getScriptProperties().getProperty("KOMMO_VENDA_GANHA") || "[]");
+    vg.forEach(x => out.erros.push({ base: x.base, id: x.id, linha: "-", cliente: x.nome, vendedor: x.resp, etapa: "Venda ganha", origem: "Etapa", data: "",
+      nivel: "alerta", tipo: "Cliente em Venda ganha", detalhe: "A etapa Venda ganha não deve ter clientes. Mover para a etapa correta no Kommo." }));
+  } catch (e) {}
   out.ok = true; out.aba = "Suporte"; out.basesUrl = ss.getUrl();
   out.basesAlteradas = Utilities.formatDate(va.alterada, tz, "dd/MM HH:mm");
   out.basesAlteradasMs = va.alterada.getTime();
@@ -543,6 +548,17 @@ function rodarKommo_(continuacao) {
         if (tmp) sb.deleteSheet(tmp);
         resumo.push(f.aba + ": " + linhas.length + " leads");
       });
+      // Venda ganha não deve ter clientes: guarda os que aparecerem para virar alerta (só a 1ª página, 1 chamada por funil)
+      try {
+        const vg = [];
+        job.funis.forEach(f => {
+          if (!f.pipeId) return;
+          const rq = kommoReq_(cfg, "leads?limit=250&filter[statuses][0][pipeline_id]=" + f.pipeId + "&filter[statuses][0][status_id]=142");
+          const j = kommoJson_(UrlFetchApp.fetch(rq.url, rq));
+          ((j && j._embedded && j._embedded.leads) || []).forEach(l => vg.push({ base: f.aba, id: String(l.id), nome: String(l.name || ""), resp: (job.usuarios || {})[l.responsible_user_id] || "" }));
+        });
+        props.setProperty("KOMMO_VENDA_GANHA", JSON.stringify(vg.slice(0, 200)));
+      } catch (e) { Logger.log("Venda ganha: " + e); }
       apagarJob_();
       props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
       props.setProperty("KOMMO_ERRO", "");
@@ -582,7 +598,7 @@ function novoJob_(cfg) {
     const aba = KOMMO_FUNIS[nomeFunil];
     const tmp = sb.getSheetByName("_tmp " + aba); if (tmp) sb.deleteSheet(tmp);
     sb.insertSheet("_tmp " + aba).hideSheet();
-    return { aba: aba, filtro: filtro, pag: 1, n: 0 };
+    return { aba: aba, filtro: filtro, pag: 1, n: 0, pipeId: p.id };
   });
   const fechadas = [];
   pipes.forEach(p => ((p._embedded || {}).statuses || []).forEach(st => { if (st.id === 142 || st.id === 143) fechadas.push(String(st.name)); }));
