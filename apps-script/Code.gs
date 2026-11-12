@@ -444,7 +444,7 @@ function rodarKommo_(continuacao) {
         const funilCerto = (Object.keys(KOMMO_FUNIS).find(k => KOMMO_FUNIS[k] === f.aba) || "").toLowerCase();
         const iFunil = COLS_EXPORT.indexOf("Funil de vendas"), iEtapa = COLS_EXPORT.indexOf("Etapa do lead"), vistos = {};
         const linhas = dadosTmp.filter(r => {
-          if (String(r[iFunil]).trim().toLowerCase() !== funilCerto || /duplicad/i.test(r[iEtapa]) || vistos[r[0]]) return false;
+          if (String(r[iFunil]).trim().toLowerCase() !== funilCerto || /duplicad/i.test(r[iEtapa]) || (job.fechadas || []).indexOf(String(r[iEtapa])) >= 0 || vistos[r[0]]) return false;
           vistos[r[0]] = 1; return true;
         }).map(r => { const c = r.slice(0, COLS_EXPORT.length).map(String); c[iNome] = cache[String(r[COLS_EXPORT.length])] || ""; return c; });
         const sh = sb.getSheetByName(f.aba) || sb.insertSheet(f.aba);
@@ -490,14 +490,17 @@ function novoJob_(cfg) {
     const p = pipes.find(x => String(x.name).trim().toLowerCase() === nomeFunil.toLowerCase());
     if (!p) throw new Error("Funil não encontrado no Kommo: " + nomeFunil);
     // pula a etapa DUPLICADOS
-    const etapas = ((p._embedded || {}).statuses || []).filter(st => !/duplicad/i.test(st.name));
+    // pula DUPLICADOS e os leads fechados (142 = venda ganha, 143 = venda perdida)
+    const etapas = ((p._embedded || {}).statuses || []).filter(st => !/duplicad/i.test(st.name) && st.id !== 142 && st.id !== 143);
     const filtro = etapas.map((st, i) => "filter[statuses][" + i + "][pipeline_id]=" + p.id + "&filter[statuses][" + i + "][status_id]=" + st.id).join("&");
     const aba = KOMMO_FUNIS[nomeFunil];
     const tmp = sb.getSheetByName("_tmp " + aba); if (tmp) sb.deleteSheet(tmp);
     sb.insertSheet("_tmp " + aba).hideSheet();
     return { aba: aba, filtro: filtro, pag: 1, n: 0 };
   });
-  const job = { inicio: Date.now(), fase: "leads", i: 0, funis: funis, etapa: etapa, funil: funil, usuarios: usuarios };
+  const fechadas = [];
+  pipes.forEach(p => ((p._embedded || {}).statuses || []).forEach(st => { if (st.id === 142 || st.id === 143) fechadas.push(String(st.name)); }));
+  const job = { inicio: Date.now(), fase: "leads", i: 0, funis: funis, etapa: etapa, funil: funil, usuarios: usuarios, fechadas: fechadas };
   salvarJob_(job);
   return job;
 }
