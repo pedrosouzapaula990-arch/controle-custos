@@ -440,7 +440,13 @@ function rodarKommo_(continuacao) {
       job.funis.forEach(f => {
         const tmp = sb.getSheetByName("_tmp " + f.aba);
         const dadosTmp = tmp && tmp.getLastRow() ? tmp.getRange(1, 1, tmp.getLastRow(), COLS_EXPORT.length + 1).getValues() : [];
-        const linhas = dadosTmp.map(r => { const c = r.slice(0, COLS_EXPORT.length).map(String); c[iNome] = cache[String(r[COLS_EXPORT.length])] || ""; return c; });
+        // segurança: mantém só os leads do funil certo e fora de DUPLICADOS (caso o Kommo ignore o filtro)
+        const funilCerto = (Object.keys(KOMMO_FUNIS).find(k => KOMMO_FUNIS[k] === f.aba) || "").toLowerCase();
+        const iFunil = COLS_EXPORT.indexOf("Funil de vendas"), iEtapa = COLS_EXPORT.indexOf("Etapa do lead"), vistos = {};
+        const linhas = dadosTmp.filter(r => {
+          if (String(r[iFunil]).trim().toLowerCase() !== funilCerto || /duplicad/i.test(r[iEtapa]) || vistos[r[0]]) return false;
+          vistos[r[0]] = 1; return true;
+        }).map(r => { const c = r.slice(0, COLS_EXPORT.length).map(String); c[iNome] = cache[String(r[COLS_EXPORT.length])] || ""; return c; });
         const sh = sb.getSheetByName(f.aba) || sb.insertSheet(f.aba);
         sh.clearContents();
         const dados = [COLS_EXPORT].concat(linhas);
