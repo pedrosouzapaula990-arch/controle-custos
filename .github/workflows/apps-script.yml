@@ -33,3 +33,10 @@ jobs:
         run: clasp push --force
       - name: Publicar nova versão (mesma URL)
         run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
+      - name: Testar (o Web App responde com o código novo?)
+        run: |
+          sleep 10
+          URL="https://script.google.com/macros/s/$DEPLOYMENT_ID/exec"
+          R=$(curl -sSL -m 120 -X POST -d '{"action":"kommoStatus","aba":"Suporte"}' "$URL")
+          echo "Resposta: $R"
+          echo "$R" | grep -q '"ok":true' || { echo "O Web App não respondeu como esperado"; exit 1; }
