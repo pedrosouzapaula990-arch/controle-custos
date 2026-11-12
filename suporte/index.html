@@ -173,7 +173,7 @@ button.ckbtn{cursor:pointer}
 
   <div id="subValid" hidden>
     <div class="card" style="margin-bottom:12px">
-      <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Bases do dia</h2><button id="vAtual">↻ Recalcular</button></div>
+      <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Bases do dia</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="vKommo">⇣ Puxar do Kommo</button><button id="vAtual">↻ Recalcular</button></div></div>
       <div class="hint" style="margin-bottom:8px">No horário da validação, exporte as duas bases do Kommo e cole a base inteira (com o cabeçalho) nas abas <b>Base Darb Oficial</b> e <b>Base Motiva</b> da <a id="vLink" target="_blank" rel="noopener" href="#">planilha das bases</a>. Depois clique em Recalcular.</div>
       <div id="vBases"></div>
     </div>
@@ -288,7 +288,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794400759"></script>
+<script src="sup-core.js?v=1794444512"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -437,6 +437,7 @@ $("supList").addEventListener("click",async e=>{
 let vtAtual=null;
 ["fvSt","fvNv","fvTp","fvBase"].forEach(id=>$(id).onchange=renderValid);
 $("vAtual").onclick=()=>loadVal(true);
+$("vKommo").onclick=()=>SupCore.puxarKommo(api,$("vKommo"),showSupBanner,()=>loadVal(true));
 $("vList").addEventListener("click",e=>{
   const b=e.target.closest("button[data-vt]");if(!b||!valRes)return;
   const it=SupCore.filtrarErros(valRes,marks,{}).find(x=>x.vid===b.dataset.vt);if(!it)return;

@@ -63,7 +63,9 @@ function executar_(action, p) {
   const nome = nomeAba_(p);
   const cols = ABAS[nome];
   if (action === "list") return { ok: true, aba: nome, items: listar_(nome) };
-  if (action === "validar") return validar_(p);
+  if (action === "validar") { const o = validar_(p); o.kommo = statusKommo_(); return o; }
+  if (action === "kommoStatus") return statusKommo_();
+  if (action === "puxarKommo") return puxarBasesKommo();
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -298,4 +300,158 @@ function calcularValidacao(bases, hoje, desde) {
     }
   });
   return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros };
+}
+
+// ===================== API DO KOMMO =====================
+// Puxa as bases direto do Kommo (mesma conta, funis diferentes), grava na planilha das bases,
+// guarda uma "foto" datada no Drive e recalcula a validação/crédito.
+// Configuração (Apps Script > Configurações do projeto > Propriedades do script):
+//   KOMMO_SUBDOMINIO = começo do endereço (ex.: "suaempresa" de suaempresa.kommo.com)
+//   KOMMO_TOKEN      = token de longa duração
+const KOMMO_FUNIS = { "DarbplayOficial": "Base Darb Oficial", "Suporte": "Base Motiva" };
+const COLS_EXPORT = ["ID", "Contato principal", "Etapa do lead", "Funil de vendas", "Lead usuário responsável",
+  "Data Criada", "Última modificação", "Modificado por", "Data Cadastro", "Plano", "Telas", "Servidor",
+  "Aplicativo Instalado", "Vendedor", "Data de Vencimento", "Última Data Vencimento", "Data Renovação",
+  "Renovação", "Fila de Renovação", "Tabulação", "Venda"];
+const PASTA_FOTOS = "Fotos das bases (Kommo)";
+
+function kommoCfg_() {
+  const pr = PropertiesService.getScriptProperties();
+  let sub = String(pr.getProperty("KOMMO_SUBDOMINIO") || "").trim().replace(/^https?:\/\//, "").replace(/\.kommo\.com.*$/, "");
+  const token = String(pr.getProperty("KOMMO_TOKEN") || "").trim();
+  if (!sub || !token) throw new Error("Falta configurar KOMMO_SUBDOMINIO e KOMMO_TOKEN nas Propriedades do script.");
+  return { base: "https://" + sub + ".kommo.com/api/v4/", token: token };
+}
+function kommoReq_(cfg, path) {
+  return { url: cfg.base + path, headers: { Authorization: "Bearer " + cfg.token }, muteHttpExceptions: true };
+}
+function kommoJson_(resp) {
+  const c = resp.getResponseCode();
+  if (c === 204) return null;
+  if (c === 401) throw new Error("Token do Kommo inválido ou expirado (401).");
+  if (c === 429) throw new Error("Kommo pediu para ir mais devagar (429).");
+  if (c >= 400) throw new Error("Kommo respondeu " + c + ": " + resp.getContentText().slice(0, 200));
+  return JSON.parse(resp.getContentText());
+}
+// busca todas as páginas de um endpoint, 6 páginas por vez (limite do Kommo: 7 req/s)
+function kommoTudo_(cfg, path, chave) {
+  const out = [];
+  let pag = 1, fim = false;
+  while (!fim) {
+    const reqs = [];
+    for (let i = 0; i < 6; i++) reqs.push(kommoReq_(cfg, path + (path.indexOf("?") >= 0 ? "&" : "?") + "limit=250&page=" + (pag + i)));
+    const resps = UrlFetchApp.fetchAll(reqs);
+    for (const r of resps) {
+      const j = kommoJson_(r);
+      const itens = j && j._embedded && j._embedded[chave] || [];
+      if (!itens.length) { fim = true; break; }
+      out.push.apply(out, itens);
+      if (itens.length < 250) { fim = true; break; }
+    }
+    pag += 6;
+    if (!fim) Utilities.sleep(1100);
+  }
+  return out;
+}
+function fmtCampo_(cf, tz) {
+  const vals = (cf.values || []).map(v => v.value).filter(v => v !== null && v !== undefined && v !== "");
+  if (!vals.length) return "";
+  if (cf.field_type === "date" || cf.field_type === "birthday") return vals.map(v => Utilities.formatDate(new Date(+v * 1000), tz, "dd.MM.yyyy")).join(", ");
+  if (cf.field_type === "date_time") return vals.map(v => Utilities.formatDate(new Date(+v * 1000), tz, "dd.MM.yyyy HH:mm")).join(", ");
+  if (cf.field_type === "checkbox") return vals[0] ? "Sim" : "";
+  return vals.join(", ");
+}
+
+// Puxa as duas bases. Pode ser chamada pelo gatilho, pelo editor ou pelo botão "Atualizar agora" do site.
+function puxarBasesKommo() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { ok: true, jaRodando: true };
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty("KOMMO_PUXANDO", String(Date.now()));
+  try {
+    const cfg = kommoCfg_(), tz = Session.getScriptTimeZone(), agora = new Date();
+    const fmtTs = ts => ts ? Utilities.formatDate(new Date(ts * 1000), tz, "dd.MM.yyyy HH:mm:ss") : "";
+    // funis e etapas
+    const pipes = kommoTudo_(cfg, "leads/pipelines", "pipelines");
+    const etapa = {}, funilNome = {};
+    pipes.forEach(p => { funilNome[p.id] = p.name; ((p._embedded || {}).statuses || []).forEach(s => etapa[p.id + ":" + s.id] = s.name); });
+    // usuários
+    const usuarios = {};
+    kommoTudo_(cfg, "users", "users").forEach(u => usuarios[u.id] = u.name);
+    const sb = basesSS_(), resumo = [];
+    Object.keys(KOMMO_FUNIS).forEach(nomeFunil => {
+      const p = pipes.find(x => String(x.name).trim().toLowerCase() === nomeFunil.toLowerCase());
+      if (!p) throw new Error("Funil não encontrado no Kommo: " + nomeFunil);
+      const leads = kommoTudo_(cfg, "leads?with=contacts&filter[pipeline_id][]=" + p.id, "leads");
+      // nomes dos contatos principais
+      const idsCont = [];
+      leads.forEach(l => { const c = ((l._embedded || {}).contacts || []); const m = c.find(x => x.is_main) || c[0]; if (m) idsCont.push(m.id); });
+      const nomes = {};
+      const LOTE = 80; // a URL do UrlFetch tem limite de ~2 KB
+      for (let i = 0; i < idsCont.length; i += LOTE * 6) {
+        const reqs = [];
+        for (let k = i; k < Math.min(i + LOTE * 6, idsCont.length); k += LOTE) {
+          reqs.push(kommoReq_(cfg, "contacts?limit=250&" + idsCont.slice(k, k + LOTE).map(id => "filter[id][]=" + id).join("&")));
+        }
+        UrlFetchApp.fetchAll(reqs).forEach(r => { const j = kommoJson_(r); ((j && j._embedded && j._embedded.contacts) || []).forEach(c => nomes[c.id] = c.name); });
+        Utilities.sleep(1100);
+      }
+      const linhas = leads.map(l => {
+        const cf = {};
+        (l.custom_fields_values || []).forEach(f => cf[String(f.field_name).trim()] = fmtCampo_(f, tz));
+        const c = ((l._embedded || {}).contacts || []); const m = c.find(x => x.is_main) || c[0];
+        const base = {
+          "ID": l.id, "Contato principal": m ? (nomes[m.id] || "") : "", "Etapa do lead": etapa[l.pipeline_id + ":" + l.status_id] || "",
+          "Funil de vendas": funilNome[l.pipeline_id] || "", "Lead usuário responsável": usuarios[l.responsible_user_id] || "",
+          "Data Criada": fmtTs(l.created_at), "Última modificação": fmtTs(l.updated_at), "Modificado por": usuarios[l.updated_by] || "",
+          "Venda": l.price || 0
+        };
+        return COLS_EXPORT.map(col => col in base ? base[col] : (cf[col] || ""));
+      });
+      // grava a base mais recente (substitui a anterior) em texto puro
+      const nomeAba = KOMMO_FUNIS[nomeFunil];
+      const sh = sb.getSheetByName(nomeAba) || sb.insertSheet(nomeAba);
+      sh.clearContents();
+      const dados = [COLS_EXPORT].concat(linhas);
+      sh.getRange(1, 1, dados.length, COLS_EXPORT.length).setNumberFormat("@").setValues(dados.map(r => r.map(v => String(v))));
+      // foto datada no Drive (CSV compactado)
+      const csv = dados.map(r => r.map(v => { v = String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";")).join("\n");
+      const nomeArq = Utilities.formatDate(agora, tz, "yyyy-MM-dd_HHmm") + " - " + nomeAba + ".csv";
+      pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
+      resumo.push(nomeAba + ": " + linhas.length + " leads");
+    });
+    props.setProperty("KOMMO_ULTIMA", Utilities.formatDate(agora, tz, "dd/MM HH:mm"));
+    props.setProperty("KOMMO_ERRO", "");
+    // recalcula na hora com a base nova
+    const salvo = lerSalvo_();
+    calcularESalvar_(salvo ? (salvo.out.desde || "") : "");
+    Logger.log("Kommo OK — " + resumo.join(" | "));
+    return { ok: true, resumo: resumo };
+  } catch (e) {
+    props.setProperty("KOMMO_ERRO", String(e.message || e));
+    Logger.log("Erro ao puxar o Kommo: " + e);
+    return { ok: false, error: String(e.message || e) };
+  } finally {
+    props.deleteProperty("KOMMO_PUXANDO");
+    lock.releaseLock();
+  }
+}
+function pastaFotos_() {
+  const it = DriveApp.getFoldersByName(PASTA_FOTOS);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(PASTA_FOTOS);
+}
+function statusKommo_() {
+  const pr = PropertiesService.getScriptProperties();
+  const puxando = +pr.getProperty("KOMMO_PUXANDO") || 0;
+  return { ok: true, configurado: !!(pr.getProperty("KOMMO_SUBDOMINIO") && pr.getProperty("KOMMO_TOKEN")),
+    puxando: puxando && Date.now() - puxando < 6 * 60 * 1000, ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "" };
+}
+
+// Rode 1x pelo editor depois de preencher as Propriedades do script:
+// cria os gatilhos (início do dia e antes de cada validação) e faz a primeira puxada.
+function configurarKommo() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "puxarBasesKommo").forEach(t => ScriptApp.deleteTrigger(t));
+  [[7, 0], [12, 30], [19, 45]].forEach(([h, m]) => ScriptApp.newTrigger("puxarBasesKommo").timeBased().everyDays(1).atHour(h).nearMinute(m).create());
+  const r = puxarBasesKommo();
+  Logger.log(JSON.stringify(r));
 }

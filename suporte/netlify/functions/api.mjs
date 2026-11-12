@@ -1,6 +1,6 @@
 // Ponte do site do SUPORTE com o Apps Script. Só acessa a aba "Suporte" (sem acesso aos custos).
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
-const ACOES = ["list", "save", "delete", "validar"];
+const ACOES = ["list", "save", "delete", "validar", "puxarKommo", "kommoStatus"];
 const TIPOS_GRAVAVEIS = ["hora", "check", "valid"];
 
 const json = (obj, status = 200) =>
@@ -24,7 +24,7 @@ export default async (req) => {
     try { out = JSON.parse(txt); } catch {
       return json({ ok: false, error: "Apps Script respondeu algo inesperado (HTTP " + r.status + "): " + txt.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) });
     }
-    if (out.ok && out.aba !== "Suporte" && body.action !== "delete") return json({ ok: false, error: "Apps Script desatualizado: falta o código novo (Code.gs)." });
+    if (out.ok && out.aba !== "Suporte" && !["delete", "puxarKommo", "kommoStatus"].includes(body.action)) return json({ ok: false, error: "Apps Script desatualizado: falta o código novo (Code.gs)." });
     return json(out);
   } catch (e) {
     return json({ ok: false, error: "Falha ao falar com o Apps Script: " + e.message });

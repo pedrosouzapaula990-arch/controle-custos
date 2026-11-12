@@ -281,7 +281,7 @@ body.pg-calc #addFab{display:none!important}
     </div>
     <div id="sSubValid" hidden>
       <div class="card" style="margin-bottom:12px">
-        <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Bases</h2><div><a id="vLink" class="linkbtn" target="_blank" rel="noopener" href="#" style="margin-right:10px">Abrir planilha das bases</a><button id="vAtual">↻ Recalcular</button></div></div>
+        <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Bases</h2><div><a id="vLink" class="linkbtn" target="_blank" rel="noopener" href="#" style="margin-right:10px">Abrir planilha das bases</a><button id="vKommo" style="margin-right:6px">⇣ Puxar do Kommo</button><button id="vAtual">↻ Recalcular</button></div></div>
         <div id="vBases"></div>
       </div>
       <div class="kpis">
@@ -429,7 +429,7 @@ body.pg-calc #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794400759"></script>
+<script src="suporte/sup-core.js?v=1794444512"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -881,6 +881,7 @@ function renderValid(){
 }
 ["fvSt","fvNv","fvTp","fvVend","fvBase"].forEach(id=>$(id).onchange=renderValid);
 $("vAtual").onclick=()=>loadVal(true);
+$("vKommo").onclick=()=>SupCore.puxarKommo((a,p)=>api(a,{aba:"Suporte",...(p||{})}),$("vKommo"),showSupBanner,()=>loadVal(true));
 $("crBox").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.id==="crAdd"){$("crTipo").value=SupCore.infoSaldo(supRecargas).ultSaldo?"recarga":"saldo";$("crData").value=hoje();$("crQt").value="";$("crObs").value="";$("crErr").textContent="";$("ovCr").classList.add("open");return}
