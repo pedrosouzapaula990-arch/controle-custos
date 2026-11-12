@@ -165,7 +165,13 @@ const SupCore = (() => {
   }
   function filtrarErros(res, marks, f) {
     const mm = marcasMap(marks);
-    return (res?.erros || []).map(e => Object.assign({}, e, { vid: vId(e), marca: mm[vId(e)] })).filter(e =>
+    const ms = res?.basesAlteradasMs || 0;
+    return (res?.erros || []).map(e => {
+      let marca = mm[vId(e)], reaberto = false;
+      // "Corrigido" mas o erro continua aparecendo depois de as bases mudarem → volta a ficar pendente
+      if (marca && marca.status === "corrigido" && ms && +marca.criadoEm && ms > +marca.criadoEm + 60000) { reaberto = true; marca = null; }
+      return Object.assign({}, e, { vid: vId(e), marca: marca, reaberto: reaberto, marcaOriginal: mm[vId(e)] });
+    }).filter(e =>
       (!f.nivel || e.nivel === f.nivel) && (!f.base || e.base === f.base) &&
       (!f.status || (f.status === "pend" ? !e.marca : !!e.marca)) &&
       (!f.vendedor || (e.vendedor || "(sem vendedor)") === f.vendedor) && (!f.tipo || e.tipo === f.tipo));
@@ -187,6 +193,7 @@ const SupCore = (() => {
         <div><b>${esc(e.tipo)}</b> · ${esc(e.cliente || "(sem nome)")} <span class="hint">ID ${esc(e.id)}</span>
           <div class="hint">${esc(e.detalhe)}</div>
           <div class="hint">${esc(e.origem)} ${esc(e.data)} · ${esc(e.base)} (linha ${e.linha}) · Vendedor: <b>${esc(e.vendedor || "—")}</b></div>
+          ${e.reaberto ? `<div class="hint"><span class="chip problema">↩ Reaberto</span> marcado como corrigido por ${esc(e.marcaOriginal.responsavel || "?")}, mas o erro continua na base</div>` : ""}
           ${m ? `<div class="hint"><span class="chip ${st.cls}">${esc(st.t)}</span> ${esc(m.responsavel || "")} ${esc(m.data ? m.data.split("-").reverse().join("/") : "")} ${esc(m.hora || "")}${m.obs ? " · 📝 " + esc(m.obs) : ""}</div>` : ""}
         </div><div class="actions">${btn}</div></div>`;
     }).join("");
@@ -200,6 +207,30 @@ const SupCore = (() => {
     if (!l.length) return '<div class="empty">Nenhum erro.</div>';
     const mx = l[0][1].total;
     return l.map(([k, v]) => `<div class="bar-row"><div class="name">${esc(k)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(3, v.total / mx * 100)}%"></div></div><div class="v">${v.total}${v.pend ? ` <span class="hint">(${v.pend} pend.)</span>` : ""}</div></div>`).join("");
+  }
+  // Auditoria e qualidade por vendedor (vendas do mês × vendas com erro de dados)
+  function htmlQualidadeVendedor(res) {
+    const v = res?.vendedores; if (!v) return "";
+    const l = Object.entries(v).filter(([, x]) => x.vendas > 0).map(([k, x]) => ({ k, vendas: x.vendas, erro: x.comErro, q: Math.round((1 - x.comErro / x.vendas) * 100) })).sort((a, b) => b.vendas - a.vendas);
+    if (!l.length) return "";
+    return `<div class="card"><h2>Vendas e qualidade por vendedor (mês)</h2><table class="dtab"><tr><td class="hint">Vendedor</td><td class="hint num">Vendas</td><td class="hint num">Com erro</td><td class="hint num">Qualidade</td></tr>
+      ${l.map(x => `<tr><td><b>${esc(x.k)}</b></td><td class="num">${x.vendas}</td><td class="num">${x.erro}</td><td class="num"><b>${x.q}%</b></td></tr>`).join("")}</table>
+      <div class="hint" style="margin-top:8px">Qualidade = vendas do mês sem nenhum erro de cadastro (servidor, plano, telas, vencimento…).</div></div>`;
+  }
+  // Conciliação de clientes ativos + previsões
+  function htmlAtivos(res) {
+    const a = res?.ativos; if (!a) return "";
+    const n = x => (+x || 0).toLocaleString("pt-BR");
+    const mov = a.movimento || {};
+    let h = `<div class="card"><h2>Clientes ativos – ${esc(a.base)}</h2><div class="kpis">
+      <div class="card kpi"><div class="lbl">Ativos hoje</div><div class="val">${n(a.agora)}</div><div class="note">vencimento de hoje em diante</div></div>`;
+    if (a.esperado != null) h += `<div class="card kpi"><div class="lbl">Esperado</div><div class="val">${n(a.esperado)}</div><div class="note">${n(a.inicioMes)} início + ${n(a.vendasMes)} vendas − ${n(a.naoRenovaram)} não renovaram</div></div>
+      <div class="card kpi"><div class="lbl">Diferença</div><div class="val ${Math.abs(a.diferenca) > 20 ? "up" : ""}">${a.diferenca > 0 ? "+" : ""}${n(a.diferenca)}</div><div class="note">${a.diferenca === 0 ? "bate certinho" : "ativos hoje − esperado"}</div></div>`;
+    h += `<div class="card kpi"><div class="lbl">Previsão fim do mês</div><div class="val">${n(a.previstoFimMes)}</div><div class="note">estimativa · renovação ${a.taxaRenovacao}% · ${a.diasRestantes} dia(s) restantes</div></div></div>`;
+    if (mov.entradas != null) h += `<div class="hint" style="margin-top:8px">Desde ${esc(mov.refInicio.split("-").reverse().join("/"))} (foto do Drive): <b>${n(mov.entradas)}</b> entraram (<b>${n(mov.reconquistas)}</b> reconquistas) · <b>${n(mov.saidas)}</b> saíram${mov.variacaoDia != null ? ` · variação vs ontem: <b>${mov.variacaoDia > 0 ? "+" : ""}${n(mov.variacaoDia)}</b>` : ""}.</div>`;
+    else h += `<div class="hint" style="margin-top:8px">As fotos diárias começaram agora; a comparação de entradas e saídas aparece a partir do próximo dia.${mov.movimentoErro ? " " + esc(mov.movimentoErro) : ""}</div>`;
+    if (a.esperado != null && Math.abs(a.diferenca) > 20) h += `<div class="hint">Diferença acima de 20: conferir cadastros sem data de vencimento, vendas sem data de cadastro ou clientes tabulados na etapa errada.</div>`;
+    return h + `</div>`;
   }
   // ---------- CRÉDITO ----------
   const LIMITE = 450;
@@ -216,6 +247,13 @@ const SupCore = (() => {
     if (!inf.ultSaldo || !res || res.consumoDesde == null || res.desde !== inf.desde) return null;
     return (+inf.ultSaldo.total || 0) + inf.somaRecargas - res.consumoDesde;
   }
+  function prevCred(saldo, c, res) {
+    const dia = +res.hoje.slice(8, 10), media = c.total / Math.max(1, dia);
+    if (saldo == null || media <= 0) return "—";
+    if (saldo <= LIMITE) return "já no limite";
+    const d = Math.floor((saldo - LIMITE) / media);
+    return d + " dia(s)";
+  }
   function htmlCredito(res, recargas, owner) {
     const c = res?.consumo; if (!c) return '<div class="empty">Buscando o último cálculo das bases…</div>';
     const saldo = calcSaldo(recargas, res), inf = infoSaldo(recargas);
@@ -224,11 +262,13 @@ const SupCore = (() => {
     const k = (lbl, val, note, cls) => `<div class="card kpi"><div class="lbl">${lbl}</div><div class="val ${cls || ""}">${val}</div><div class="note">${note || ""}</div></div>`;
     const n = x => (+x || 0).toLocaleString("pt-BR");
     let html = res.basesAlteradas ? `<div class="hint" style="margin-bottom:10px">Bases de ${esc(res.basesAlteradas)} · cálculo de ${esc(res.calculadoEm || "")}${res.desatualizado ? " · <b>atualizando (até 5 min)</b>" : ""}</div>` : "";
+    html += htmlAtivos(res);
     html += alerta ? `<div class="banner" style="display:block">⚠️ Saldo de créditos em <b>${n(saldo)}</b>, abaixo do limite de ${LIMITE}. Pedir recarga.</div>` : "";
     html += `<div class="kpis">
       ${k("Consumo em " + mesNome, n(c.total), (res.basesAlteradas ? "bases de " + res.basesAlteradas : "créditos até " + res.hoje.split("-").reverse().slice(0, 2).join("/")))}
       ${k("Vendas", n(c.vendas), n(c.linhasVendas) + " cliente(s)")}
       ${k("Renovações", n(c.renovacoes), n(c.linhasRenovacoes) + " cliente(s)")}
+      ${k("Previsão do crédito", prevCred(saldo, c, res), "dias até chegar em " + LIMITE)}
       ${k("Saldo estimado", saldo == null ? "—" : n(saldo), saldo == null ? (owner ? "Registre o saldo atual abaixo" : "Saldo ainda não informado") : "desde " + inf.desde.split("-").reverse().join("/") + " · limite " + LIMITE, alerta ? "up" : "")}
     </div>`;
     const bars = obj => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]); const mx = e.length ? e[0][1] : 1;
@@ -273,5 +313,5 @@ const SupCore = (() => {
     return l.join("\n");
   }
   return { DEF, TURNOS, ST, VST, LIMITE, minAgora, hm2min, turnoDe, horaDe, disparos, resp, tarefas, parseDados, tarefasDoDia, ckId, htmlChecklist, renderHora, textoWhats, curto,
-    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
+    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlQualidadeVendedor, htmlAtivos, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
 })();

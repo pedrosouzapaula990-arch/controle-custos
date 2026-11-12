@@ -163,6 +163,8 @@ function basesSS_() {
 // ===================== VALIDAÇÃO E CRÉDITO =====================
 // O suporte cola a base inteira (exportação do Kommo) nas abas abaixo
 const BASES = ["Base Darb Oficial", "Base Motiva"];
+const COLS_OPC = ["Última Data Vencimento", "Modificado por"];
+const BASE_INICIO_MES = { "2026-11": 5775 }; // clientes ativos no início do mês (informado pelo Pedro)
 const COLS_BASE = ["ID", "Contato principal", "Etapa do lead", "Data Cadastro", "Data Renovação", "Plano", "Telas", "Servidor", "Vendedor", "Data de Vencimento"];
 
 // O cálculo roda em segundo plano (gatilho a cada 5 min) e só quando a planilha das bases muda.
@@ -198,18 +200,52 @@ function calcularESalvar_(desde) {
     const lastCol = sh.getLastColumn(), n = sh.getLastRow() - 1;
     const head = sh.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(h => String(h).trim());
     const cols = {};
-    COLS_BASE.forEach(c => {
+    COLS_BASE.concat(COLS_OPC).forEach(c => {
       const i = head.indexOf(c);
       if (i >= 0) cols[c] = sh.getRange(2, i + 1, n, 1).getDisplayValues().map(r => r[0]);
     });
     return { nome: nome, head: head, cols: cols, n: n };
   });
   const out = calcularValidacao(bases, hoje, desde);
+  try { out.ativos.movimento = fotoAtivos_(hoje, out._ids, tz); } catch (e) { out.ativos.movimentoErro = String(e.message || e); }
+  delete out._ids;
   out.ok = true; out.aba = "Suporte"; out.basesUrl = ss.getUrl();
   out.basesAlteradas = Utilities.formatDate(va.alterada, tz, "dd/MM HH:mm");
+  out.basesAlteradasMs = va.alterada.getTime();
   out.calculadoEm = Utilities.formatDate(agora, tz, "dd/MM HH:mm");
   try { arquivoCalculo_().setContent(JSON.stringify({ versao: va.versao, out: out })); } catch (e) {}
   return out;
+}
+// Foto diária dos IDs ativos/vencidos (uma por dia, sobrescrita ao longo do dia) e comparação com o início do mês e com ontem
+function fotoDia_(data, criar) {
+  const nome = "ativos-" + data + ".json", pasta = pasta_(), it = pasta.getFilesByName(nome);
+  if (it.hasNext()) return it.next();
+  return criar ? pasta.createFile(nome, "{}", "application/json") : null;
+}
+function lerFoto_(data) { const f = fotoDia_(data, false); if (!f) return null; try { const x = JSON.parse(f.getBlob().getDataAsString()); return x && x.a ? x : null; } catch (e) { return null; } }
+function fotoAtivos_(hoje, ids, tz) {
+  fotoDia_(hoje, true).setContent(JSON.stringify(ids));
+  const mes = hoje.slice(0, 7), ini = mes + "-01";
+  // referência de início do mês: a primeira foto do mês; senão a mais antiga disponível
+  let refData = null, refFoto = null;
+  for (let d = 1; d <= +hoje.slice(8, 10); d++) {
+    const dd = mes + "-" + ("0" + d).slice(-2), f = lerFoto_(dd);
+    if (f) { refData = dd; refFoto = f; break; }
+  }
+  const mov = { fotoHoje: hoje, refInicio: refData, entradas: null, saidas: null, reconquistas: null, entradasLista: [], saidasLista: [] };
+  if (refFoto && refData !== hoje) {
+    const antes = {}; refFoto.a.forEach(i => antes[i] = 1);
+    const agora = {}; ids.a.forEach(i => agora[i] = 1);
+    const venc0 = {}; (refFoto.v || []).forEach(i => venc0[i] = 1);
+    const ent = ids.a.filter(i => !antes[i]), sai = refFoto.a.filter(i => !agora[i]);
+    mov.entradas = ent.length; mov.saidas = sai.length; mov.reconquistas = ent.filter(i => venc0[i]).length;
+    mov.entradasLista = ent.slice(0, 50); mov.saidasLista = sai.slice(0, 50);
+    mov.ativosRef = refFoto.a.length;
+  }
+  // ontem
+  const ont = new Date(Date.parse(hoje + "T12:00:00Z") - 86400000).toISOString().slice(0, 10), fo = lerFoto_(ont);
+  if (fo) { mov.ontemAtivos = fo.a.length; mov.variacaoDia = ids.a.length - fo.a.length; }
+  return mov;
 }
 // Gatilho (a cada 5 min): recalcula só se as bases mudaram
 function recalcularSeMudou() {
@@ -248,6 +284,11 @@ function calcularValidacao(bases, hoje, desde) {
   const consumo = { total: 0, vendas: 0, renovacoes: 0, linhasVendas: 0, linhasRenovacoes: 0, porBase: {}, porServidor: {} };
   let consumoDesde = desde ? 0 : null;
   const erros = [], infoBases = [];
+  const fimMes = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7), 0)).getUTCDate();
+  const diaHoje = +hoje.slice(8, 10);
+  const ativosIds = [], vencidosIds = [];
+  const ativ = { agora: 0, porBase: {}, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0, vendasHoje: 0 };
+  const vend = {}, detAt = {};
 
   bases.forEach(b => {
     const faltando = COLS_BASE.filter(c => !b.cols[c]);
@@ -257,7 +298,7 @@ function calcularValidacao(bases, hoje, desde) {
     consumo.detalheBase = consumo.detalheBase || {};
     const det = consumo.detalheBase[b.nome] = { vendas: 0, renovacoes: 0, clientesVendas: 0, clientesRenovacoes: 0 };
     for (let r = 0; r < b.n; r++) {
-      const v = c => String(b.cols[c][r] || "").trim();
+      const v = c => String((b.cols[c] || [])[r] || "").trim();
       if (/duplicad/i.test(v("Etapa do lead"))) continue;
       const dc = parse(v("Data Cadastro")), dr = parse(v("Data Renovação"));
       const inCad = dc && dc.slice(0, 7) === mesAtual && dc <= hoje;
@@ -271,6 +312,23 @@ function calcularValidacao(bases, hoje, desde) {
         if (dc && dc >= desde && dc <= hoje) consumoDesde += cred;
         if (dr && dr >= desde && dr <= hoje) consumoDesde += cred;
       }
+      // Ativos / conciliação (toda a base, sem duplicados)
+      const dvA = parse(v("Data de Vencimento"));
+      const dB = detAt[b.nome] = detAt[b.nome] || { agora: 0, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0 };
+      if (dvA) {
+        const idA = v("ID");
+        if (dvA >= hoje) { ativ.agora++; ativ.porBase[b.nome] = (ativ.porBase[b.nome] || 0) + 1; ativosIds.push(idA);
+          dB.agora++; if (dvA.slice(0, 7) === mesAtual && dvA > hoje) { ativ.venceRestoMes++; dB.venceRestoMes++; } }
+        else { vencidosIds.push(idA); if (dvA.slice(0, 7) === mesAtual) { ativ.naoRenovaram++; dB.naoRenovaram++; } }
+      }
+      if (inCad) { ativ.vendasMes++; dB.vendasMes++; if (dc === hoje) ativ.vendasHoje++; }
+      if (dr && dr.slice(0, 7) === mesAtual && dr <= hoje) { ativ.renovados++; dB.renovados++; }
+      const vnm = v("Vendedor") || "(sem vendedor)";
+      if (inCad) { vend[vnm] = vend[vnm] || { vendas: 0, comErro: 0, ids: {} }; vend[vnm].vendas++; }
+      // Tabulação: renovou no mês mas o vencimento não avançou / está em etapa de vencido
+      const ult = parse(v("Última Data Vencimento"));
+      if (inRen && dvA && ult && dvA <= ult) erros.push({ base: b.nome, id: v("ID"), linha: r + 2, cliente: v("Contato principal"), vendedor: v("Vendedor"), etapa: v("Etapa do lead"),
+        origem: "Tabulação", data: br(dr), nivel: "alerta", tipo: "Renovou sem avançar vencimento", detalhe: "Renovação " + br(dr) + ", mas o vencimento (" + br(dvA) + ") não passou da última data (" + br(ult) + "). Modificado por: " + (v("Modificado por") || "—") });
       // Etapa x vencimento (vale para toda a base, não só o mês)
       const etp = v("Etapa do lead").toLowerCase(), dvE = parse(v("Data de Vencimento"));
       if (dvE && !/vital/.test(etp)) {
@@ -309,7 +367,21 @@ function calcularValidacao(bases, hoje, desde) {
       }
     }
   });
-  return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros };
+  // qualidade por vendedor: vendas do mês com algum erro/alerta de dados
+  erros.forEach(e => { const k = e.vendedor || "(sem vendedor)"; if (vend[k] && /Venda/.test(e.origem) && e.nivel === "erro") vend[k].ids[e.base + e.id] = 1; });
+  Object.keys(vend).forEach(k => { vend[k].comErro = Object.keys(vend[k].ids).length; delete vend[k].ids; });
+  // Conciliação e previsão: só da Base Darb Oficial (o início do mês informado é dela)
+  const D = detAt["Base Darb Oficial"] || { agora: 0, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0 };
+  const inicio = BASE_INICIO_MES[mesAtual] || null;
+  const esperado = inicio == null ? null : inicio + D.vendasMes - D.naoRenovaram;
+  const taxaRen = (D.renovados + D.naoRenovaram) ? D.renovados / (D.renovados + D.naoRenovaram) : 1;
+  const diasRest = fimMes - diaHoje;
+  const prevFim = Math.round(D.agora + (D.vendasMes / Math.max(1, diaHoje)) * diasRest - D.venceRestoMes * (1 - taxaRen));
+  const ativos = { base: "Base Darb Oficial", agora: D.agora, total: ativ.agora, porBase: ativ.porBase, inicioMes: inicio, vendasMes: D.vendasMes, naoRenovaram: D.naoRenovaram, esperado: esperado,
+    diferenca: esperado == null ? null : D.agora - esperado, renovados: D.renovados, taxaRenovacao: Math.round(taxaRen * 1000) / 10,
+    venceRestoMes: D.venceRestoMes, diasRestantes: diasRest, previstoFimMes: prevFim, diaDoMes: diaHoje };
+  return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros,
+    ativos: ativos, vendedores: vend, _ids: { a: ativosIds, v: vencidosIds } };
 }
 
 // ===================== API DO KOMMO =====================

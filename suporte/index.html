@@ -164,7 +164,7 @@ button.ckbtn{cursor:pointer}
     <button data-sub="check" class="on">Checklist do dia</button>
     <button data-sub="hora">Hora a hora</button>
     <button data-sub="valid">Validação</button>
-    <button data-sub="cred">Crédito</button>
+    <button data-sub="cred">Crédito e ativos</button>
   </div>
 
   <div id="subCheck">
@@ -265,6 +265,7 @@ button.ckbtn{cursor:pointer}
         <option value="certo">Conferido – está certo</option>
         <option value="vendedor">Erro do vendedor (avisado)</option>
       </select></div>
+    <div class="field"><label for="vtResp">Quem tratou</label><select id="vtResp" required></select></div>
     <div class="field"><label for="vtObs">Observação</label><input id="vtObs" placeholder="Ex.: venda proporcional de 15 dias / vendedora avisada"></div>
     <div class="err" id="vtErr"></div>
     <div class="mfoot">
@@ -288,7 +289,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794446451"></script>
+<script src="sup-core.js?v=1794511669"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -442,15 +443,18 @@ $("vList").addEventListener("click",e=>{
   const b=e.target.closest("button[data-vt]");if(!b||!valRes)return;
   const it=SupCore.filtrarErros(valRes,marks,{}).find(x=>x.vid===b.dataset.vt);if(!it)return;
   vtAtual=it;$("vtInfo").textContent=it.tipo+" · "+(it.cliente||"")+" (ID "+it.id+") · "+it.detalhe;
-  $("vtSt").value=it.marca?.status||(it.nivel==="erro"?"corrigido":"certo");$("vtObs").value=it.marca?.obs||"";$("vtErr").textContent="";
+  $("vtSt").value=it.marca?.status||(it.nivel==="erro"?"corrigido":"certo");$("vtObs").value=it.marca?.obs||"";
+  {const rs=SupCore.resp(supCfg),t0=SupCore.turnoDe(SupCore.minAgora()),sug0=it.marca?.responsavel||(t0&&rs.find(x=>x.toLowerCase().includes(t0.chave)))||"";
+   $("vtResp").innerHTML='<option value="" disabled '+(sug0?"":"selected")+'>Selecione…</option>'+[...new Set([...rs,...(sug0?[sug0]:[])])].map(r=>`<option ${r===sug0?"selected":""}>${esc(r)}</option>`).join("")}$("vtErr").textContent="";
   $("vtDel").style.display=it.marca?"inline-block":"none";$("ovVal").classList.add("open");
 });
 $("formVal").addEventListener("submit",async e=>{
   e.preventDefault();if(!vtAtual)return;const it=vtAtual;
   if($("vtSt").value!=="corrigido"&&!$("vtObs").value.trim()){$("vtErr").textContent="Explique na observação.";return}
-  const t=SupCore.turnoDe(SupCore.minAgora());$("vtSave").disabled=true;
+  if(!$("vtResp").value){$("vtErr").textContent="Escolha quem tratou.";return}
+  $("vtSave").disabled=true;
   try{
-    await api("save",{item:{id:it.vid,tipo:"valid",data:hoje(),hora:agoraHM(),responsavel:t?t.nome:"",fila:0,total:0,status:$("vtSt").value,
+    await api("save",{item:{id:it.vid,tipo:"valid",data:hoje(),hora:agoraHM(),responsavel:$("vtResp").value,fila:0,total:0,status:$("vtSt").value,
       dados:JSON.stringify({base:it.base,lead:it.id,cliente:it.cliente,vendedor:it.vendedor,tipo:it.tipo,nivel:it.nivel}),obs:$("vtObs").value.trim(),criadoEm:Date.now()}});
     $("ovVal").classList.remove("open");vtAtual=null;await loadSup();
   }catch(err){$("vtErr").textContent="Não foi possível salvar: "+err.message}

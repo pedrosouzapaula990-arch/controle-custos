@@ -273,7 +273,7 @@ body.pg-calc #addFab{display:none!important}
       <button data-ssub="check" class="on">Checklist do dia</button>
       <button data-ssub="hora">Hora a hora</button>
       <button data-ssub="valid">Validação</button>
-      <button data-ssub="cred">Crédito</button>
+      <button data-ssub="cred">Crédito e ativos</button>
     </div>
     <div id="sSubCheck">
       <div class="hint" style="margin-bottom:10px">O suporte marca as tarefas no site dele. <button type="button" class="linkbtn" data-lista="tarefas">Editar tarefas</button></div>
@@ -292,6 +292,7 @@ body.pg-calc #addFab{display:none!important}
       </div>
       <div class="grid2">
         <div class="card"><h2>Erros por vendedor</h2><div id="vPorVend"></div></div>
+        <div id="vQual"></div>
         <div class="card"><h2>Como ler</h2><div class="hint" style="line-height:1.6"><b>Erro</b>: dado faltando ou inválido na base (servidor, plano, telas, vendedor, vencimento).<br><b>Alerta</b>: precisa conferir — vencimento fora do plano, venda e renovação no mesmo mês, mais servidores que telas.<br>O suporte marca cada ponto como corrigido, conferido ou erro do vendedor.</div></div>
       </div>
       <div class="card">
@@ -429,7 +430,7 @@ body.pg-calc #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794446451"></script>
+<script src="suporte/sup-core.js?v=1794511669"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -872,7 +873,7 @@ function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);if(!valRes)return;
   const k=SupCore.kpisValidacao(valRes,supMarks);
   $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="de "+k.total+" pontos";$("vVend").textContent=k.vendErros;
-  $("vPorVend").innerHTML=SupCore.htmlPorVendedor(valRes,supMarks);
+  $("vPorVend").innerHTML=SupCore.htmlPorVendedor(valRes,supMarks);$("vQual").innerHTML=SupCore.htmlQualidadeVendedor(valRes);
   const opt=(id,vals,todos)=>{const cur=$(id).value;$(id).innerHTML=`<option value="">${todos}</option>`+vals.map(t=>`<option ${t===cur?"selected":""}>${esc(t)}</option>`).join("")};
   opt("fvTp",[...new Set(valRes.erros.map(e=>e.tipo))].sort(),"Todos os tipos");
   opt("fvVend",[...new Set(valRes.erros.map(e=>e.vendedor||"(sem vendedor)"))].sort(),"Todos os vendedores");
