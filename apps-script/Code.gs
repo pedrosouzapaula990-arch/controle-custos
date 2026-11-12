@@ -206,7 +206,9 @@ function calcularESalvar_(desde) {
     });
     return { nome: nome, head: head, cols: cols, n: n };
   });
-  const out = calcularValidacao(bases, hoje, desde);
+  const ini = inicioAuto_(hoje);
+  const out = calcularValidacao(bases, hoje, desde, ini.valor);
+  out.ativos.origemInicio = ini.origem;
   try { out.ativos.movimento = fotoAtivos_(hoje, out._ids, tz); } catch (e) { out.ativos.movimentoErro = String(e.message || e); }
   delete out._ids;
   try {
@@ -252,8 +254,38 @@ function fotoAtivos_(hoje, ids, tz) {
   if (fo) { mov.ontemAtivos = fo.a.length; mov.variacaoDia = ids.a.length - fo.a.length; }
   return mov;
 }
+// Início do mês automático: ativos da Base Darb Oficial na foto do último dia do mês anterior
+// (se não houver, a primeira foto do mês; se não houver, o valor fixo informado).
+function inicioAuto_(hoje) {
+  const base = "Base Darb Oficial", mes = hoje.slice(0, 7);
+  const ultimoAnt = new Date(Date.parse(mes + "-01T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+  const f = lerFoto_(ultimoAnt);
+  if (f && f.n && f.n[base] != null) return { valor: f.n[base], origem: "foto de " + ultimoAnt.split("-").reverse().join("/") };
+  if (BASE_INICIO_MES[mes] != null) return { valor: BASE_INICIO_MES[mes], origem: "valor informado" };
+  for (let d = 1; d <= +hoje.slice(8, 10); d++) {
+    const dd = mes + "-" + ("0" + d).slice(-2), g = lerFoto_(dd);
+    if (g && g.n && g.n[base] != null) return { valor: g.n[base], origem: "primeira foto do mês (" + dd.split("-").reverse().join("/") + ")" };
+  }
+  return { valor: null, origem: "sem dados" };
+}
+// Gatilho diário 23:50: fecha a foto do dia (a do último dia do mês vira o início do mês seguinte)
+function fotoFimDoDia() {
+  const salvo = lerSalvo_();
+  calcularESalvar_(salvo ? (salvo.out.desde || "") : "");
+}
+// Cria sozinho os gatilhos que faltarem (sem precisar abrir o Apps Script)
+function garantirGatilhos_() {
+  const p = PropertiesService.getScriptProperties(), tz = Session.getScriptTimeZone();
+  const hoje = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+  if (p.getProperty("GATILHOS_OK") === hoje) return;
+  const ex = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  if (ex.indexOf("fotoFimDoDia") < 0) ScriptApp.newTrigger("fotoFimDoDia").timeBased().everyDays(1).atHour(23).nearMinute(50).create();
+  if (ex.indexOf("puxarBasesKommo") < 0 && p.getProperty("KOMMO_TOKEN")) { try { configurarKommo(); } catch (e) {} }
+  p.setProperty("GATILHOS_OK", hoje);
+}
 // Gatilho (a cada 5 min): recalcula só se as bases mudaram
 function recalcularSeMudou() {
+  try { garantirGatilhos_(); } catch (e) {}
   const salvo = lerSalvo_();
   const desde = salvo ? (salvo.out.desde || "") : "";
   if (salvo && salvo.versao === versaoAtual_(desde).versao) return;
@@ -266,7 +298,7 @@ function arquivoCalculo_() {
 }
 
 // ---- regra (pura, sem dependência do Google) ----
-function calcularValidacao(bases, hoje, desde) {
+function calcularValidacao(bases, hoje, desde, inicioAuto) {
   const MESES = { "mensal": 1, "bimestral": 2, "dois meses": 2, "trimestral": 3, "semestral": 6, "anual": 12 };
   const mesAtual = hoje.slice(0, 7);
   const parse = s => {
@@ -377,7 +409,7 @@ function calcularValidacao(bases, hoje, desde) {
   Object.keys(vend).forEach(k => { vend[k].comErro = Object.keys(vend[k].ids).length; delete vend[k].ids; });
   // Conciliação e previsão: só da Base Darb Oficial (o início do mês informado é dela)
   const D = detAt["Base Darb Oficial"] || { agora: 0, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0 };
-  const inicio = BASE_INICIO_MES[mesAtual] || null;
+  const inicio = inicioAuto != null ? inicioAuto : (BASE_INICIO_MES[mesAtual] || null);
   const esperado = inicio == null ? null : inicio + D.vendasMes - D.naoRenovaram;
   const taxaRen = (D.renovados + D.naoRenovaram) ? D.renovados / (D.renovados + D.naoRenovaram) : 1;
   const diasRest = fimMes - diaHoje;
@@ -386,7 +418,7 @@ function calcularValidacao(bases, hoje, desde) {
     diferenca: esperado == null ? null : D.agora - esperado, renovados: D.renovados, taxaRenovacao: Math.round(taxaRen * 1000) / 10,
     venceRestoMes: D.venceRestoMes, diasRestantes: diasRest, previstoFimMes: prevFim, diaDoMes: diaHoje };
   return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros,
-    ativos: ativos, vendedores: vend, _ids: { a: ativosIds, v: vencidosIds } };
+    ativos: ativos, vendedores: vend, _ids: { a: ativosIds, v: vencidosIds, n: ativ.porBase } };
 }
 
 // ===================== API DO KOMMO =====================
