@@ -185,23 +185,35 @@ const SupCore = (() => {
       tratados: all.length - pend.length, total: all.length,
       vendErros: all.filter(e => e.marca?.status === "vendedor").length };
   }
+  // Agrupa os pontos por lead: um lead com vários problemas aparece uma vez só
+  const chaveLead = e => e.base + "|" + (e.id || ("l" + e.linha));
+  function agruparLeads(lista) {
+    const m = new Map();
+    lista.forEach(e => { const k = chaveLead(e); if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
+    return [...m.values()];
+  }
   function htmlListaValidacao(lista, interativo, limite) {
-    const nL = lista.length, nErro = lista.filter(e => e.nivel === "erro").length;
-    const cont = `<div class="hint" style="padding:4px 0 10px"><b>${nL.toLocaleString("pt-BR")}</b> lead${nL === 1 ? "" : "s"} nesta lista${nL ? ` · ${nErro.toLocaleString("pt-BR")} erro(s) · ${(nL - nErro).toLocaleString("pt-BR")} alerta(s)` : ""}</div>`;
-    if (!lista.length) return cont + '<div class="empty">Nada para mostrar com esses filtros. 🎉</div>';
-    const rows = lista.slice(0, limite || 300).map(e => {
-      const m = e.marca, st = m ? VST[m.status] || { t: m.status, cls: "" } : null;
-      const btn = interativo ? `<button type="button" data-vt="${esc(e.vid)}">${m ? "Alterar" : "Tratar"}</button>` : "";
+    const grupos = agruparLeads(lista), nL = grupos.length, nErro = grupos.filter(g => g.some(e => e.nivel === "erro")).length;
+    const cont = `<div class="hint" style="padding:4px 0 10px"><b>${nL.toLocaleString("pt-BR")}</b> lead${nL === 1 ? "" : "s"} nesta lista${nL ? ` · ${nErro.toLocaleString("pt-BR")} com erro · ${(nL - nErro).toLocaleString("pt-BR")} só com alerta` : ""} <span style="opacity:.7">(${lista.length.toLocaleString("pt-BR")} ponto${lista.length === 1 ? "" : "s"})</span></div>`;
+    if (!grupos.length) return cont + '<div class="empty">Nada para mostrar com esses filtros. 🎉</div>';
+    const rows = grupos.slice(0, limite || 300).map(g => {
+      const e = g[0], temErro = g.some(x => x.nivel === "erro"), todosTratados = g.every(x => x.marca);
+      const btn = interativo ? `<button type="button" data-vt="${esc(e.vid)}">${todosTratados ? "Alterar" : "Tratar"}${g.length > 1 ? " tudo" : ""}</button>` : "";
+      const linhas = g.map(x => {
+        const m = x.marca, st = m ? VST[m.status] || { t: m.status, cls: "" } : null;
+        return `<div class="hint" style="margin-top:3px"><span class="chip ${x.nivel === "erro" ? "problema" : "andamento"}" style="font-size:10px">${x.nivel === "erro" ? "Erro" : "Alerta"}</span> <b>${esc(x.tipo)}</b> — ${esc(x.detalhe)}
+          ${x.reaberto ? ` <span class="chip problema" style="font-size:10px">↩ Reaberto</span>` : ""}
+          ${m ? ` <span class="chip ${st.cls}" style="font-size:10px">${esc(st.t)}</span> ${esc(m.responsavel || "")} ${esc(m.data ? m.data.split("-").reverse().join("/") : "")} ${esc(m.hora || "")}${m.obs ? " · 📝 " + esc(m.obs) : ""}` : ""}</div>`;
+      }).join("");
+      const origens = [...new Set(g.map(x => x.origem + " " + x.data))].join(" · ");
       return `<div class="vrow">
-        <div><span class="chip ${e.nivel === "erro" ? "problema" : "andamento"}">${e.nivel === "erro" ? "Erro" : "Alerta"}</span></div>
-        <div><b>${esc(e.tipo)}</b> · ${esc(e.cliente || "(sem nome)")} <span class="hint">ID ${esc(e.id)}</span>
-          <div class="hint">${esc(e.detalhe)}</div>
-          <div class="hint">${esc(e.origem)} ${esc(e.data)} · ${esc(e.base)} (linha ${e.linha}) · Vendedor: <b>${esc(e.vendedor || "—")}</b></div>
-          ${e.reaberto ? `<div class="hint"><span class="chip problema">↩ Reaberto</span> marcado como corrigido por ${esc(e.marcaOriginal.responsavel || "?")}, mas o erro continua na base</div>` : ""}
-          ${m ? `<div class="hint"><span class="chip ${st.cls}">${esc(st.t)}</span> ${esc(m.responsavel || "")} ${esc(m.data ? m.data.split("-").reverse().join("/") : "")} ${esc(m.hora || "")}${m.obs ? " · 📝 " + esc(m.obs) : ""}</div>` : ""}
+        <div><span class="chip ${temErro ? "problema" : "andamento"}">${temErro ? "Erro" : "Alerta"}</span>${g.length > 1 ? `<div class="hint" style="margin-top:4px">${g.length} pontos</div>` : ""}</div>
+        <div><b>${esc(e.cliente || "(sem nome)")}</b> <span class="hint">ID ${esc(e.id)}</span>
+          <div class="hint">${esc(origens)} · ${esc(e.base)} (linha ${e.linha}) · Vendedor: <b>${esc(e.vendedor || "—")}</b></div>
+          ${linhas}
         </div><div class="actions">${btn}</div></div>`;
     }).join("");
-    const mais = lista.length > (limite || 300) ? `<div class="hint" style="padding:8px 0">Mostrando ${limite || 300} de ${lista.length}. Use os filtros para ver o resto.</div>` : "";
+    const mais = grupos.length > (limite || 300) ? `<div class="hint" style="padding:8px 0">Mostrando ${limite || 300} de ${grupos.length} leads. Use os filtros para ver o resto.</div>` : "";
     return cont + rows + mais;
   }
   function htmlPorVendedor(res, marks) {

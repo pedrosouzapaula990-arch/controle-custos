@@ -289,7 +289,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794514327"></script>
+<script src="sup-core.js?v=1794514459"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -435,18 +435,20 @@ $("supList").addEventListener("click",async e=>{
 });
 
 // ============ validação ============
-let vtAtual=null;
+let vtAtual=null,vtGrupo=[];
 ["fvSt","fvNv","fvTp","fvBase"].forEach(id=>$(id).onchange=renderValid);
 $("vAtual").onclick=()=>loadVal(true);
 $("vKommo").onclick=()=>SupCore.puxarKommo(api,$("vKommo"),showSupBanner,()=>loadVal(true));
 $("vList").addEventListener("click",e=>{
   const b=e.target.closest("button[data-vt]");if(!b||!valRes)return;
-  const it=SupCore.filtrarErros(valRes,marks,{}).find(x=>x.vid===b.dataset.vt);if(!it)return;
-  vtAtual=it;$("vtInfo").textContent=it.tipo+" · "+(it.cliente||"")+" (ID "+it.id+") · "+it.detalhe;
-  $("vtSt").value=it.marca?.status||(it.nivel==="erro"?"corrigido":"certo");$("vtObs").value=it.marca?.obs||"";
+  const filt=SupCore.filtrarErros(valRes,marks,{status:$("fvSt").value,nivel:$("fvNv").value,tipo:$("fvTp").value,base:$("fvBase").value});
+  const it=filt.find(x=>x.vid===b.dataset.vt);if(!it)return;
+  vtGrupo=filt.filter(x=>x.base===it.base&&x.id===it.id);
+  vtAtual=it;$("vtInfo").textContent=(it.cliente||"(sem nome)")+" (ID "+it.id+") · "+vtGrupo.map(x=>x.tipo).join(" + ");
+  $("vtSt").value=it.marca?.status||(vtGrupo.some(x=>x.nivel==="erro")?"corrigido":"certo");$("vtObs").value=it.marca?.obs||"";
   {const rs=SupCore.resp(supCfg),t0=SupCore.turnoDe(SupCore.minAgora()),sug0=it.marca?.responsavel||(t0&&rs.find(x=>x.toLowerCase().includes(t0.chave)))||"";
    $("vtResp").innerHTML='<option value="" disabled '+(sug0?"":"selected")+'>Selecione…</option>'+[...new Set([...rs,...(sug0?[sug0]:[])])].map(r=>`<option ${r===sug0?"selected":""}>${esc(r)}</option>`).join("")}$("vtErr").textContent="";
-  $("vtDel").style.display=it.marca?"inline-block":"none";$("ovVal").classList.add("open");
+  $("vtDel").style.display=vtGrupo.some(x=>x.marca)?"inline-block":"none";$("ovVal").classList.add("open");
 });
 $("formVal").addEventListener("submit",async e=>{
   e.preventDefault();if(!vtAtual)return;const it=vtAtual;
@@ -454,13 +456,14 @@ $("formVal").addEventListener("submit",async e=>{
   if(!$("vtResp").value){$("vtErr").textContent="Escolha quem tratou.";return}
   $("vtSave").disabled=true;
   try{
-    await api("save",{item:{id:it.vid,tipo:"valid",data:hoje(),hora:agoraHM(),responsavel:$("vtResp").value,fila:0,total:0,status:$("vtSt").value,
-      dados:JSON.stringify({base:it.base,lead:it.id,cliente:it.cliente,vendedor:it.vendedor,tipo:it.tipo,nivel:it.nivel}),obs:$("vtObs").value.trim(),criadoEm:Date.now()}});
+    for(const x of (vtGrupo.length?vtGrupo:[it]))
+    await api("save",{item:{id:x.vid,tipo:"valid",data:hoje(),hora:agoraHM(),responsavel:$("vtResp").value,fila:0,total:0,status:$("vtSt").value,
+      dados:JSON.stringify({base:x.base,lead:x.id,cliente:x.cliente,vendedor:x.vendedor,tipo:x.tipo,nivel:x.nivel}),obs:$("vtObs").value.trim(),criadoEm:Date.now()}});
     $("ovVal").classList.remove("open");vtAtual=null;await loadSup();
   }catch(err){$("vtErr").textContent="Não foi possível salvar: "+err.message}
   finally{$("vtSave").disabled=false}
 });
-$("vtDel").onclick=async()=>{if(!vtAtual?.marca)return;$("vtDel").disabled=true;try{await api("delete",{id:vtAtual.vid});$("ovVal").classList.remove("open");await loadSup()}catch(err){$("vtErr").textContent=err.message}finally{$("vtDel").disabled=false}};
+$("vtDel").onclick=async()=>{if(!vtAtual?.marca&&!vtGrupo.some(x=>x.marca))return;$("vtDel").disabled=true;try{for(const x of vtGrupo.filter(x=>x.marca))await api("delete",{id:x.vid});$("ovVal").classList.remove("open");await loadSup()}catch(err){$("vtErr").textContent=err.message}finally{$("vtDel").disabled=false}};
 $("vtCancel").onclick=()=>$("ovVal").classList.remove("open");
 $("ovVal").addEventListener("click",e=>{if(e.target===$("ovVal"))$("ovVal").classList.remove("open")});
 
