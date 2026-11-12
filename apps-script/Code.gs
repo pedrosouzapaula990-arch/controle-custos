@@ -209,7 +209,7 @@ function calcularESalvar_(desde) {
   const ini = inicioAuto_(hoje);
   const out = calcularValidacao(bases, hoje, desde, ini.valor);
   out.ativos.origemInicio = ini.origem;
-  try { out.ativos.movimento = fotoAtivos_(hoje, out._ids, tz); } catch (e) { out.ativos.movimentoErro = String(e.message || e); }
+  try { out.ativos.movimento = fotoAtivos_(hoje, out._ids, tz); detalharMovimento_(out.ativos.movimento, bases, hoje); } catch (e) { out.ativos.movimentoErro = String(e.message || e); }
   delete out._ids;
   try {
     const vg = JSON.parse(PropertiesService.getScriptProperties().getProperty("KOMMO_VENDA_GANHA") || "[]");
@@ -246,13 +246,33 @@ function fotoAtivos_(hoje, ids, tz) {
     const venc0 = {}; (refFoto.v || []).forEach(i => venc0[i] = 1);
     const ent = ids.a.filter(i => !antes[i]), sai = refFoto.a.filter(i => !agora[i]);
     mov.entradas = ent.length; mov.saidas = sai.length; mov.reconquistas = ent.filter(i => venc0[i]).length;
-    mov.entradasLista = ent.slice(0, 50); mov.saidasLista = sai.slice(0, 50);
+    mov.entradasLista = ent; mov.saidasLista = sai; mov._venc0 = venc0;
     mov.ativosRef = refFoto.a.length;
   }
   // ontem
   const ont = new Date(Date.parse(hoje + "T12:00:00Z") - 86400000).toISOString().slice(0, 10), fo = lerFoto_(ont);
   if (fo) { mov.ontemAtivos = fo.a.length; mov.variacaoDia = ids.a.length - fo.a.length; }
   return mov;
+}
+// Transforma as listas de IDs (entrou / saiu) em linhas com nome, etapa, vendedor, vencimento e o motivo provável
+function detalharMovimento_(mov, bases, hoje) {
+  if (!mov || mov.entradasLista == null) return;
+  const venc0 = mov._venc0 || {}; delete mov._venc0;
+  const mes = hoje.slice(0, 7), idx = {};
+  const iso = s => { s = String(s || "").trim(); const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/); return m ? m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2) : ""; };
+  bases.forEach(b => { if (!b.n || !b.cols.ID) return; for (let r = 0; r < b.n; r++) idx[b.cols.ID[r]] = { b: b, r: r }; });
+  const linha = (id, tipo) => {
+    const x = idx[id]; if (!x) return { id: id, cliente: "", base: "", etapa: "(fora das bases)", vendedor: "", venc: "", motivo: tipo === "saiu" ? "Saiu das bases (duplicado, venda perdida ou ganha)" : "Não encontrado" };
+    const g = c => String((x.b.cols[c] || [])[x.r] || "").trim();
+    const dc = iso(g("Data Cadastro")), dr = iso(g("Data Renovação")), dv = iso(g("Data de Vencimento"));
+    let motivo;
+    if (tipo === "entrou") motivo = venc0[id] ? "Reconquista (estava vencido)" : dc && dc.slice(0, 7) === mes ? "Venda nova" : dr && dr.slice(0, 7) === mes ? "Renovação" : "Vencimento alterado / cliente novo na base";
+    else motivo = dv && dv < hoje ? "Venceu e não renovou" : "Vencimento alterado / mudou de etapa";
+    return { id: id, cliente: g("Contato principal"), base: x.b.nome, etapa: g("Etapa do lead"), vendedor: g("Vendedor"), venc: dv, motivo: motivo };
+  };
+  const cortar = (l, t) => l.slice(0, 800).map(id => linha(id, t));
+  mov.totalEntradas = mov.entradasLista.length; mov.totalSaidas = mov.saidasLista.length;
+  mov.entradasLista = cortar(mov.entradasLista, "entrou"); mov.saidasLista = cortar(mov.saidasLista, "saiu");
 }
 // Início do mês automático: ativos da Base Darb Oficial na foto do último dia do mês anterior
 // (se não houver, a primeira foto do mês; se não houver, o valor fixo informado).
@@ -325,7 +345,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
   const diaHoje = +hoje.slice(8, 10);
   const ativosIds = [], vencidosIds = [];
   const ativ = { agora: 0, porBase: {}, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0, vendasHoje: 0 };
-  const vend = {}, detAt = {};
+  const vend = {}, detAt = {}, serie = { vendasDia: {}, vendasMes: {}, renovMes: {}, porBase: {} };
 
   bases.forEach(b => {
     const faltando = COLS_BASE.filter(c => !b.cols[c]);
@@ -358,6 +378,8 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
           dB.agora++; if (dvA.slice(0, 7) === mesAtual && dvA > hoje) { ativ.venceRestoMes++; dB.venceRestoMes++; } }
         else { vencidosIds.push(idA); if (dvA.slice(0, 7) === mesAtual) { ativ.naoRenovaram++; dB.naoRenovaram++; } }
       }
+      if (dc) { serie.vendasMes[dc.slice(0, 7)] = (serie.vendasMes[dc.slice(0, 7)] || 0) + 1; if (dc.slice(0, 7) === mesAtual) serie.vendasDia[dc] = (serie.vendasDia[dc] || 0) + 1; }
+      if (dr) { serie.renovMes[dr.slice(0, 7)] = (serie.renovMes[dr.slice(0, 7)] || 0) + 1; }
       if (inCad) { ativ.vendasMes++; dB.vendasMes++; if (dc === hoje) ativ.vendasHoje++; }
       if (dr && dr.slice(0, 7) === mesAtual && dr <= hoje) { ativ.renovados++; dB.renovados++; }
       const vnm = v("Vendedor") || "(sem vendedor)";
@@ -418,7 +440,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
     diferenca: esperado == null ? null : D.agora - esperado, renovados: D.renovados, taxaRenovacao: Math.round(taxaRen * 1000) / 10,
     venceRestoMes: D.venceRestoMes, diasRestantes: diasRest, previstoFimMes: prevFim, diaDoMes: diaHoje };
   return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros,
-    ativos: ativos, vendedores: vend, _ids: { a: ativosIds, v: vencidosIds, n: ativ.porBase } };
+    ativos: ativos, vendedores: vend, serie: serie, _ids: { a: ativosIds, v: vencidosIds, n: ativ.porBase } };
 }
 
 // ===================== API DO KOMMO =====================

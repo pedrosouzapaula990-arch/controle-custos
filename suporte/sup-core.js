@@ -2,7 +2,7 @@
 const SupCore = (() => {
   const DEF = {
     disparos: ["07:00 – Vence hoje", "10:15 – Vence amanhã", "11:30 – Venceu ontem", "17:40 – Vence hoje", "19:30 – Venceu ontem"],
-    resp: ["Turno manhã (9h–16:40)", "Turno noite (16:40–23:30)"],
+    resp: ["Diego", "Felipe", "Kaique", "Lígia"],
     tarefas: [
       "12:50 – Validação diária (base, vendas e indicações)",
       "13:30 – Acompanhar solicitações de conteúdo",
@@ -29,7 +29,9 @@ const SupCore = (() => {
   const porHora = (a, b) => (horaDe(a) ?? 9999) - (horaDe(b) ?? 9999);
 
   const disparos = cfg => [...(cfg?.disparos || DEF.disparos)].sort(porHora);
-  const resp = cfg => cfg?.resp || DEF.resp;
+  const RESP_ANTIGO = JSON.stringify(["Turno manhã (9h–16:40)", "Turno noite (16:40–23:30)"]);
+  // lista padrão de responsáveis; quem ainda tem a lista antiga (só os turnos) passa a ver os nomes
+  const resp = cfg => (cfg?.resp && JSON.stringify(cfg.resp) !== RESP_ANTIGO) ? cfg.resp : DEF.resp;
   const tarefas = cfg => [...(cfg?.tarefas || DEF.tarefas)].sort(porHora);
   const parseDados = r => { try { const d = JSON.parse(r.dados || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; } };
 
@@ -270,7 +272,7 @@ const SupCore = (() => {
     const d = Math.floor((saldo - LIMITE) / media);
     return d + " dia(s)";
   }
-  function htmlCredito(res, recargas, owner) {
+  function htmlCredito(res, recargas, owner, semAtivos) {
     const c = res?.consumo; if (!c) return '<div class="empty">Buscando o último cálculo das bases…</div>';
     const saldo = calcSaldo(recargas, res), inf = infoSaldo(recargas);
     const alerta = saldo != null && saldo <= LIMITE;
@@ -278,7 +280,7 @@ const SupCore = (() => {
     const k = (lbl, val, note, cls) => `<div class="card kpi"><div class="lbl">${lbl}</div><div class="val ${cls || ""}">${val}</div><div class="note">${note || ""}</div></div>`;
     const n = x => (+x || 0).toLocaleString("pt-BR");
     let html = res.basesAlteradas ? `<div class="hint" style="margin-bottom:10px">Bases de ${esc(res.basesAlteradas)} · cálculo de ${esc(res.calculadoEm || "")}${res.desatualizado ? " · <b>atualizando (até 5 min)</b>" : ""}</div>` : "";
-    html += htmlAtivos(res);
+    if (!semAtivos) html += htmlAtivos(res);
     html += alerta ? `<div class="banner" style="display:block">⚠️ Saldo de créditos em <b>${n(saldo)}</b>, abaixo do limite de ${LIMITE}. Pedir recarga.</div>` : "";
     html += `<div class="kpis">
       ${k("Consumo em " + mesNome, n(c.total), (res.basesAlteradas ? "bases de " + res.basesAlteradas : "créditos até " + res.hoje.split("-").reverse().slice(0, 2).join("/")))}
@@ -297,6 +299,58 @@ const SupCore = (() => {
         <div><span class="chip ${r.status === "saldo" ? "andamento" : "concluido"}">${r.status === "saldo" ? "Saldo informado" : "Recarga"}</span> <b>${r.status === "saldo" ? "" : "+"}${n(r.total)}</b> créditos${r.obs ? `<div class="meta">${esc(r.obs)}</div>` : ""}</div>
         <div class="actions">${owner ? `<button data-crdel="${esc(r.id)}">✕</button>` : ""}</div></div>`).join("") : '<div class="empty">Nenhuma recarga registrada.</div>'}</div>`;
     return html;
+  }
+
+  // ---------- DASHBOARD (aba só do dono) ----------
+  const ultMeses = (mes, k) => { const [y, m] = mes.split("-").map(Number), l = []; for (let i = k - 1; i >= 0; i--) { const d = new Date(y, m - 1 - i, 1); l.push(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")); } return l; };
+  const mesCurto = m => { const [y, mm] = m.split("-"); return new Date(+y, +mm - 1, 1).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") + "/" + y.slice(2); };
+  function htmlDashboard(sub, c) {
+    const res = c.res, brl = c.brl, n = x => (+x || 0).toLocaleString("pt-BR");
+    const k = (l, v, note, cls) => `<div class="card kpi"><div class="lbl">${l}</div><div class="val ${cls || ""}">${v}</div><div class="note">${note || ""}</div></div>`;
+    const barras = (pares, fmt) => { const mx = Math.max(1, ...pares.map(p => p[1])); return pares.map(([nm, v]) => `<div class="bar-row"><div class="name" title="${esc(nm)}">${esc(nm)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(2, v / mx * 100)}%"></div></div><div class="v">${(fmt || n)(v)}</div></div>`).join("") || '<div class="empty">Sem dados.</div>'; };
+    if (!res || !res.consumo) return '<div class="empty">Carregando os números das bases…</div>';
+    const custos = c.custos || [], totCustos = custos.reduce((a, i) => a + (+i.valor || 0), 0);
+    const trafego = custos.filter(i => /an[uú]ncio|tr[aá]fego|meta ads/i.test(i.categoria || "")), totTraf = trafego.reduce((a, i) => a + (+i.valor || 0), 0);
+    const co = res.consumo, vendas = co.linhasVendas, ren = co.linhasRenovacoes, at = res.ativos || {};
+    const saldo = calcSaldo(c.recargas, res), kp = kpisValidacao(res, c.marks);
+    const cpv = vendas ? totTraf / vendas : 0;
+    const meses = ultMeses(res.mes, 6), sr = res.serie || {};
+    if (sub === "resumo") {
+      const av = [];
+      if (saldo != null && saldo <= LIMITE) av.push(`Saldo de créditos em <b>${n(saldo)}</b>, abaixo de ${LIMITE}. Pedir recarga.`);
+      if (at.diferenca != null && Math.abs(at.diferenca) > 20) av.push(`Clientes ativos com diferença de <b>${at.diferenca > 0 ? "+" : ""}${n(at.diferenca)}</b> contra o esperado.`);
+      if (kp.erros) av.push(`<b>${n(kp.erros)}</b> erros pendentes na validação.`);
+      const cf = res.kommo && res.kommo.conferencia; if (cf && !cf.completa) av.push("Última extração do Kommo <b>incompleta</b>.");
+      if (res.desatualizado) av.push("As bases mudaram e o cálculo está atualizando.");
+      return `<div class="kpis">${k("Custos do mês", brl(totCustos), n(custos.length) + " lançamento(s)")}${k("Vendas do mês", n(vendas), n(ren) + " renovações")}
+        ${k("Clientes ativos", n(at.agora), at.esperado != null ? "esperado " + n(at.esperado) : "Base Darb Oficial", at.diferenca != null && Math.abs(at.diferenca) > 20 ? "up" : "")}${k("Consumo de crédito", n(co.total), "saldo " + (saldo == null ? "—" : n(saldo)) + " · " + prevCred(saldo, co, res))}
+        ${k("Anúncios", brl(totTraf), cpv ? brl(cpv) + " por venda" : "sem vendas no mês")}${k("Erros pendentes", n(kp.erros), n(kp.alertas) + " alertas")}
+        ${k("Previsão ativos (fim do mês)", n(at.previstoFimMes), "estimativa")}${k("Renovação no mês", (at.taxaRenovacao != null ? at.taxaRenovacao : "—") + "%", "Base Darb Oficial")}</div>
+        <div class="card"><h2>Atenção</h2>${av.length ? av.map(x => `<div class="hint" style="margin:5px 0">⚠️ ${x}</div>`).join("") : '<div class="hint">Nada fora do normal agora. ✔</div>'}</div>
+        <div class="hint" style="margin-top:8px">Bases de ${esc(res.basesAlteradas || "—")} · cálculo de ${esc(res.calculadoEm || "—")}.</div>`;
+    }
+    if (sub === "credito") return htmlCredito(res, c.recargas, false, true);
+    if (sub === "vendas") {
+      const dias = Object.entries(sr.vendasDia || {}).sort().map(([d, v]) => [d.slice(8, 10) + "/" + d.slice(5, 7), v]);
+      const vend = Object.entries(res.vendedores || {}).sort((a, b) => b[1].vendas - a[1].vendas).map(([nm, x]) => [nm, x.vendas]);
+      return `<div class="kpis">${k("Vendas no mês", n(vendas), "clientes com data de cadastro no mês")}${k("Vendas em créditos", n(co.vendas), "telas × meses")}${k("Renovações", n(ren), n(co.renovacoes) + " créditos")}${k("Média por dia", n(Math.round(vendas / Math.max(1, +res.hoje.slice(8, 10)))), "vendas/dia")}</div>
+        <div class="grid2"><div class="card"><h2>Vendas por vendedor (mês)</h2>${barras(vend)}</div><div class="card"><h2>Vendas por dia (mês)</h2>${barras(dias)}</div></div>
+        <div class="card"><h2>Vendas por mês</h2>${barras(meses.map(m => [mesCurto(m), (sr.vendasMes || {})[m] || 0]))}</div>${htmlQualidadeVendedor(res)}`;
+    }
+    if (sub === "trafego") {
+      const l = [...trafego].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+      return `<div class="kpis">${k("Gasto em anúncios", brl(totTraf), "no mês, das categorias de anúncios")}${k("Vendas no mês", n(vendas), "")}${k("Custo por venda", cpv ? brl(cpv) : "—", "anúncios ÷ vendas")}${k("Lançamentos", n(l.length), "de anúncios")}</div>
+        <div class="card"><h2>Lançamentos de anúncios</h2>${l.length ? l.map(i => `<div class="rep" style="grid-template-columns:90px 1fr auto"><div class="h">${esc((i.data || "").split("-").reverse().join("/"))}</div><div>${esc(i.descricao || "")}<div class="meta">${esc(i.categoria || "")}</div></div><div><b>${brl(+i.valor)}</b></div></div>`).join("") : '<div class="empty">Nenhum lançamento de anúncios neste mês.</div>'}</div>
+        <div class="hint">Conta as categorias com "anúncio", "tráfego" ou "Meta Ads" no nome.</div>`;
+    }
+    if (sub === "ativos") {
+      const mov = at.movimento || {}, tab = (lista, vazio) => `<div style="max-height:46vh;overflow-y:auto"><table class="dtab"><tr><td class="hint">Cliente</td><td class="hint">Motivo</td><td class="hint">Etapa</td><td class="hint">Vencimento</td></tr>${lista.map(x => `<tr><td><b>${esc(x.cliente || "(sem nome)")}</b><div class="hint">ID ${esc(x.id)} · ${esc(x.base)} · ${esc(x.vendedor || "—")}</div></td><td>${esc(x.motivo)}</td><td class="hint">${esc(x.etapa)}</td><td class="hint">${esc(x.venc ? x.venc.split("-").reverse().join("/") : "—")}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">${vazio}</td></tr>`}</table></div>`;
+      const ren = meses.map(m => [mesCurto(m), (sr.renovMes || {})[m] || 0]);
+      return htmlAtivos(res) + `<div class="grid2"><div class="card"><h2>Renovações por mês</h2>${barras(ren)}<div class="hint" style="margin-top:6px">Clientes com data de renovação em cada mês (as duas bases).</div></div>
+        <div class="card"><h2>Ativos por base</h2>${barras(Object.entries(at.porBase || {}))}<div class="hint" style="margin-top:6px">A origem (campanha/indicação) precisa de um campo de origem no Kommo; ainda não vem nas bases.</div></div></div>
+        ${mov.entradas != null ? `<div class="card"><h2>Entraram (${n(mov.totalEntradas)})</h2>${tab(mov.entradasLista || [], "Ninguém entrou desde a foto de referência.")}</div><div class="card"><h2>Saíram (${n(mov.totalSaidas)})</h2>${tab(mov.saidasLista || [], "Ninguém saiu.")}</div>` : '<div class="card"><div class="hint">A lista de quem entrou e saiu aparece a partir da segunda foto diária (amanhã).</div></div>'}`;
+    }
+    return "";
   }
 
   // Botão "Puxar do Kommo": dispara e acompanha até terminar (a puxada leva ~1-2 min)
@@ -329,5 +383,5 @@ const SupCore = (() => {
     return l.join("\n");
   }
   return { DEF, TURNOS, ST, VST, LIMITE, minAgora, hm2min, turnoDe, horaDe, disparos, resp, tarefas, parseDados, tarefasDoDia, ckId, htmlChecklist, renderHora, textoWhats, curto,
-    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlQualidadeVendedor, htmlAtivos, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
+    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlQualidadeVendedor, htmlAtivos, htmlDashboard, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
 })();

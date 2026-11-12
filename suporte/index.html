@@ -143,6 +143,8 @@ button.ckbtn{cursor:pointer}
 @media(max-width:640px){.ckrow{grid-template-columns:30px 44px 1fr}.ckrow .chip{grid-column:3;justify-self:start}}
 #supFab{display:none}
 @media(max-width:640px){#supFab{display:block}#supAdd{display:none}}
+
+#vList{max-height:68vh;overflow-y:auto;padding-right:6px;scrollbar-width:thin}
 </style>
 </head>
 <body>
@@ -289,7 +291,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794515110"></script>
+<script src="sup-core.js?v=1794515873"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";

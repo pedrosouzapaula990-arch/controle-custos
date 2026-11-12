@@ -147,14 +147,16 @@ body.pg-suporte #addFab{display:none!important}
 .ctab .pb div{height:100%;background:var(--red);opacity:.7}
 @media(max-width:900px){.calcgrid{grid-template-columns:1fr}}
 @media(max-width:640px){#pgCalc .kpi .val{font-size:17px}#pgCalc .kpis{gap:8px}#pgCalc .kpi{padding:12px}}
-body.pg-calc #addFab{display:none!important}
+body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
 .fab{position:fixed;right:18px;bottom:18px;border-radius:999px;padding:14px 20px;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none}
 @media(max-width:640px){.fab{display:block}#addTop{display:none}}
+
+#vList{max-height:68vh;overflow-y:auto;padding-right:6px;scrollbar-width:thin}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="tabs"><a href="#custos" id="tabCustos" class="on">Custos</a><a href="#suporte" id="tabSuporte">Suporte</a><a href="#calculadora" id="tabCalc">Calculadora</a></nav>
+  <nav class="tabs"><a href="#custos" id="tabCustos" class="on">Custos</a><a href="#suporte" id="tabSuporte">Suporte</a><a href="#calculadora" id="tabCalc">Calculadora</a><a href="#dashboard" id="tabDash">Dashboard</a></nav>
   <div id="pgCustos">
   <header>
     <div>
@@ -253,6 +255,17 @@ body.pg-calc #addFab{display:none!important}
         <table class="dtab ctab" id="cTab"></table>
       </div>
     </div>
+  </div>
+
+  <div id="pgDash" hidden>
+    <header><div><h1>Dashboard</h1><div class="sub">Custos, suporte, vendas e clientes ativos em um lugar</div></div>
+      <div class="monthnav"><button id="dashAtual">↻ Atualizar</button></div></header>
+    <div class="banner" id="dashBanner"></div>
+    <div class="subtabs">
+      <button data-dsub="resumo" class="on">Resumão</button><button data-dsub="credito">Crédito</button><button data-dsub="vendas">Vendas</button>
+      <button data-dsub="trafego">Tráfego pago</button><button data-dsub="ativos">Clientes ativos</button>
+    </div>
+    <div id="dashBox"><div class="empty">Carregando…</div></div>
   </div>
 
   <div id="pgSuporte" hidden>
@@ -430,7 +443,7 @@ body.pg-calc #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794515110"></script>
+<script src="suporte/sup-core.js?v=1794515873"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -726,7 +739,7 @@ async function load(){
     if(cfg){try{const c=JSON.parse(cfg.obs);if(Array.isArray(c.cats)&&Array.isArray(c.by))config=c}catch(e){}}
     items=all.filter(i=>i.id!=="__config__"&&i.status!=="config").map(i=>({...i,valor:+i.valor,data:normData(i.data),mesRef:normData(String(i.mesRef||"")).slice(0,7)}));
     $("status").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" · "+items.length+" lançamento(s) no total";
-    showBanner("");render();return true;
+    showBanner("");render();if(pagina==="dash")renderDash();return true;
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
 }
 // ================== SUPORTE ==================
@@ -757,7 +770,7 @@ let supMarks=[],supRecargas=[],valRes=null,valCarregando=false,supChecks=[],supS
 let supDia=hoje();
 function supCfgAtual(){return {...(supCfg||{}),disparos:[...supDisparos()],resp:[...supResp()],tarefas:[...SupCore.tarefas(supCfg)]}}
 function supDisparos(){const l=[...(supCfg?.disparos||SUP_DEF.disparos)];return l.sort((a,b)=>(horaDisparo(a)??9999)-(horaDisparo(b)??9999))}
-function supResp(){return supCfg?.resp||SUP_DEF.resp}
+function supResp(){return SupCore.resp(supCfg)}
 async function salvarSupConfig(c){
   supCfg=c;
   await api("save",{aba:"Suporte",item:{id:"__config__",tipo:"config",data:"",hora:"",responsavel:"",fila:0,total:0,status:"",dados:JSON.stringify(c),obs:"(configuração do site - não apagar)",criadoEm:0}});
@@ -784,6 +797,7 @@ async function loadSup(){
 function renderSup(){
   $("sDate").value=supDia;
   $("sSubCheck").hidden=supSub!=="check";$("sSubHora").hidden=supSub!=="hora";$("sSubValid").hidden=supSub!=="valid";$("sSubCred").hidden=supSub!=="cred";
+  if(pagina==="dash")renderDash();
   if(supSub==="valid")renderValid();
   if(supSub==="cred")$("crBox").innerHTML=SupCore.htmlCredito(valRes,supRecargas,true);
   document.querySelectorAll("[data-ssub]").forEach(b=>b.classList.toggle("on",b.dataset.ssub===supSub));
@@ -949,9 +963,19 @@ document.querySelectorAll(".cin").forEach(i=>i.addEventListener("input",calcRend
 $("cReset").onclick=()=>{try{localStorage.removeItem("calc_v1")}catch(e){}calcPreencher(CALC_PADRAO);calcRender()};
 calcPreencher(calcLer());calcRender();
 
+let dashSub="resumo";
+function renderDash(){
+  document.querySelectorAll("[data-dsub]").forEach(b=>b.classList.toggle("on",b.dataset.dsub===dashSub));
+  const key=ym(new Date());
+  $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,custos:items.filter(i=>(i.data||"").startsWith(key))});
+}
+document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
+$("dashAtual").onclick=()=>{load();loadSup().then(()=>loadVal(true))};
 function rota(){
-  pagina=location.hash==="#suporte"?"suporte":location.hash==="#calculadora"?"calc":"custos";
-  $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";
+  pagina=location.hash==="#suporte"?"suporte":location.hash==="#calculadora"?"calc":location.hash==="#dashboard"?"dash":"custos";
+  $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";$("pgDash").hidden=pagina!=="dash";
+  $("tabDash").classList.toggle("on",pagina==="dash");document.body.classList.toggle("pg-dash",pagina==="dash");
+  if(pagina==="dash"){renderDash();load();loadSup().then(()=>{if(!valRes)loadVal(false)})}
   $("tabCustos").classList.toggle("on",pagina==="custos");$("tabSuporte").classList.toggle("on",pagina==="suporte");$("tabCalc").classList.toggle("on",pagina==="calc");
   document.body.classList.toggle("pg-suporte",pagina==="suporte");document.body.classList.toggle("pg-calc",pagina==="calc");
   if(pagina==="suporte"){renderSup();loadSup()}
