@@ -271,6 +271,16 @@ function calcularValidacao(bases, hoje, desde) {
         if (dc && dc >= desde && dc <= hoje) consumoDesde += cred;
         if (dr && dr >= desde && dr <= hoje) consumoDesde += cred;
       }
+      // Etapa x vencimento (vale para toda a base, não só o mês)
+      const etp = v("Etapa do lead").toLowerCase(), dvE = parse(v("Data de Vencimento"));
+      if (dvE && !/vital/.test(etp)) {
+        const etapaAtiva = /clientes ativos|vence em 3|vence em 2|vence amanh|vence hoje/.test(etp);
+        const etapaVencida = /venceu ontem|vencidos|reconquista/.test(etp);
+        const cadErro = (tipo, det) => erros.push({ base: b.nome, id: v("ID"), linha: r + 2, cliente: v("Contato principal"), vendedor: v("Vendedor"),
+          etapa: v("Etapa do lead"), origem: "Etapa x vencimento", data: br(dvE), nivel: "erro", tipo: tipo, detalhe: det });
+        if (etapaAtiva && dvE < hoje) cadErro("Vencido em etapa de ativo", "Vencimento " + br(dvE) + " já passou, mas está em " + v("Etapa do lead"));
+        else if (etapaVencida && dvE >= hoje) cadErro("Ativo em etapa de vencido", "Vencimento " + br(dvE) + " ainda não passou, mas está em " + v("Etapa do lead"));
+      }
       if (!inCad && !inRen) continue;
       const vezes = (inCad ? 1 : 0) + (inRen ? 1 : 0);
       consumo.total += cred * vezes; consumo.porBase[b.nome] += cred * vezes;
