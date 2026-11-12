@@ -136,13 +136,25 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 #supFab{display:none}
 body.pg-suporte #addFab{display:none!important}
 @media(max-width:640px){body.pg-suporte #supFab{display:block}#supAdd{display:none}}
+.cgrp{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 8px}
+.cgrp:first-of-type{margin-top:4px}
+.ctab td{padding:9px 4px;border-bottom:1px solid var(--line)}
+.ctab tr.tot td{font-weight:700;border-top:2px solid var(--ink)}
+.ctab tr.luc td{font-weight:700;font-size:16px;color:var(--accent)}
+.ctab tr.neg td{color:var(--red)}
+.ctab .det{font-size:12px;color:var(--muted)}
+.ctab .pb{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}
+.ctab .pb div{height:100%;background:var(--red);opacity:.7}
+@media(max-width:900px){.calcgrid{grid-template-columns:1fr}}
+@media(max-width:640px){#pgCalc .kpi .val{font-size:17px}#pgCalc .kpis{gap:8px}#pgCalc .kpi{padding:12px}}
+body.pg-calc #addFab{display:none!important}
 .fab{position:fixed;right:18px;bottom:18px;border-radius:999px;padding:14px 20px;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none}
 @media(max-width:640px){.fab{display:block}#addTop{display:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="tabs"><a href="#custos" id="tabCustos" class="on">Custos</a><a href="#suporte" id="tabSuporte">Suporte</a></nav>
+  <nav class="tabs"><a href="#custos" id="tabCustos" class="on">Custos</a><a href="#suporte" id="tabSuporte">Suporte</a><a href="#calculadora" id="tabCalc">Calculadora</a></nav>
   <div id="pgCustos">
   <header>
     <div>
@@ -187,6 +199,60 @@ body.pg-suporte #addFab{display:none!important}
     <div class="empty" id="emptyList" style="display:none">Nenhum custo lançado neste mês.</div>
     <div class="status" id="status">Conectando…</div>
   </div>
+  </div>
+
+  <div id="pgCalc" hidden>
+    <header>
+      <div>
+        <h1>Calculadora de faturamento</h1>
+        <div class="sub">Simulação mensal: mude os números e o resultado atualiza na hora</div>
+      </div>
+      <div><button id="cReset">Restaurar padrão</button></div>
+    </header>
+    <div class="kpis">
+      <div class="card kpi"><div class="lbl">Faturamento</div><div class="val" id="kcFat">—</div><div class="note" id="kcFatN"></div></div>
+      <div class="card kpi"><div class="lbl">Custos totais</div><div class="val" id="kcCus">—</div><div class="note" id="kcCusN"></div></div>
+      <div class="card kpi"><div class="lbl">Sobra (lucro)</div><div class="val" id="kcLuc">—</div><div class="note" id="kcLucN"></div></div>
+      <div class="card kpi"><div class="lbl">Vendas pelo tráfego</div><div class="val" id="kcVen">—</div><div class="note" id="kcVenN"></div></div>
+    </div>
+    <div class="grid2 calcgrid">
+      <div class="card">
+        <h2>Premissas</h2>
+        <div class="cgrp">Clientes e faturamento</div>
+        <div class="row2">
+          <div class="field"><label for="c_cli">Clientes ativos</label><input id="c_cli" class="cin" type="number" min="0" step="1"></div>
+          <div class="field"><label for="c_tk">Ticket médio (R$)</label><input id="c_tk" class="cin" type="number" min="0" step="0.01"></div>
+        </div>
+        <div class="cgrp">Créditos</div>
+        <div class="row2">
+          <div class="field"><label for="c_cr">Custo por crédito (R$)</label><input id="c_cr" class="cin" type="number" min="0" step="0.01"></div>
+          <div class="field"><label for="c_mg">Créditos a mais (% sobre clientes)</label><input id="c_mg" class="cin" type="number" min="0" step="0.1"></div>
+        </div>
+        <div class="cgrp">Tráfego pago e vendas</div>
+        <div class="row2">
+          <div class="field"><label for="c_ad">Anúncios por dia (R$)</label><input id="c_ad" class="cin" type="number" min="0" step="1"></div>
+          <div class="field"><label for="c_dias">Dias no mês</label><input id="c_dias" class="cin" type="number" min="0" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="c_cpa">Custo de anúncio por venda (R$)</label><input id="c_cpa" class="cin" type="number" min="0" step="0.01"></div>
+          <div class="field"><label for="c_rv">RV por venda (R$)</label><input id="c_rv" class="cin" type="number" min="0" step="0.01"></div>
+        </div>
+        <div class="cgrp">Outros custos</div>
+        <div class="row2">
+          <div class="field"><label for="c_sup">Suporte (R$/mês)</label><input id="c_sup" class="cin" type="number" min="0" step="1"></div>
+          <div class="field"><label for="c_dsp">Disparos API oficial (R$/mês)</label><input id="c_dsp" class="cin" type="number" min="0" step="1"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="c_imp">Imposto (% do faturamento)</label><input id="c_imp" class="cin" type="number" min="0" step="0.1"></div>
+          <div></div>
+        </div>
+        <div class="hint">Os valores que você mudar ficam salvos neste aparelho.</div>
+      </div>
+      <div class="card">
+        <h2>Resultado do mês</h2>
+        <table class="dtab ctab" id="cTab"></table>
+      </div>
+    </div>
   </div>
 
   <div id="pgSuporte" hidden>
@@ -845,11 +911,47 @@ $("supList").addEventListener("click",async e=>{
 });
 
 // ---- navegação entre abas ----
+// ================== CALCULADORA ==================
+const CALC_PADRAO={c_cli:10000,c_tk:29.69,c_cr:4.20,c_mg:12,c_ad:1000,c_dias:30,c_cpa:30,c_rv:10,c_sup:15000,c_dsp:10000,c_imp:12};
+function calcLer(){let v={};try{v=JSON.parse(localStorage.getItem("calc_v1")||"{}")}catch(e){}return {...CALC_PADRAO,...v}}
+function calcPreencher(v){Object.keys(CALC_PADRAO).forEach(k=>$(k).value=v[k])}
+function calcRender(){
+  const v={};Object.keys(CALC_PADRAO).forEach(k=>{const x=parseFloat(String($(k).value).replace(",","."));v[k]=isFinite(x)?x:0});
+  try{localStorage.setItem("calc_v1",JSON.stringify(v))}catch(e){}
+  const fat=v.c_cli*v.c_tk;
+  const creditos=Math.ceil(Math.round(v.c_cli*(1+v.c_mg/100)*1000)/1000);
+  const cCred=creditos*v.c_cr;
+  const imp=fat*v.c_imp/100;
+  const ads=v.c_ad*v.c_dias;
+  const vendas=v.c_cpa>0?Math.floor(ads/v.c_cpa):0;
+  const rv=vendas*v.c_rv;
+  const itens=[
+    ["Créditos",cCred,`${creditos.toLocaleString("pt-BR")} créditos × ${brl(v.c_cr)}`],
+    ["Imposto",imp,`${v.c_imp}% do faturamento`],
+    ["Anúncios (tráfego pago)",ads,`${brl(v.c_ad)} × ${v.c_dias} dias`],
+    ["Suporte",v.c_sup,"fixo mensal"],
+    ["Disparos (API oficial)",v.c_dsp,"fixo mensal"],
+    ["RV das vendas",rv,`${vendas.toLocaleString("pt-BR")} vendas × ${brl(v.c_rv)}`]
+  ];
+  const tot=itens.reduce((s,i)=>s+i[1],0),luc=fat-tot,pct=x=>fat>0?(x/fat*100).toFixed(1).replace(".",",")+"%":"—";
+  $("kcFat").textContent=brl(fat);$("kcFatN").textContent=`${v.c_cli.toLocaleString("pt-BR")} clientes × ${brl(v.c_tk)}`;
+  $("kcCus").textContent=brl(tot);$("kcCusN").textContent=pct(tot)+" do faturamento";
+  $("kcLuc").textContent=brl(luc);$("kcLuc").className="val "+(luc<0?"up":"down");$("kcLucN").textContent="margem de "+pct(luc);
+  $("kcVen").textContent=vendas.toLocaleString("pt-BR");$("kcVenN").textContent=`${brl(ads)} ÷ ${brl(v.c_cpa)} por venda`;
+  $("cTab").innerHTML=`<tr><td><b>Faturamento</b><div class="det">${v.c_cli.toLocaleString("pt-BR")} clientes × ${brl(v.c_tk)}</div></td><td class="num"><b>${brl(fat)}</b></td><td class="num det">100%</td></tr>`
+    +itens.sort((a,b)=>b[1]-a[1]).map(([n,val,d])=>`<tr><td>− ${n}<div class="det">${d}</div><div class="pb"><div style="width:${fat>0?Math.min(100,val/fat*100):0}%"></div></div></td><td class="num">${brl(val)}</td><td class="num det">${pct(val)}</td></tr>`).join("")
+    +`<tr class="tot"><td>Custos totais</td><td class="num">${brl(tot)}</td><td class="num det">${pct(tot)}</td></tr>`
+    +`<tr class="luc ${luc<0?"neg":""}"><td>Sobra (lucro)</td><td class="num">${brl(luc)}</td><td class="num">${pct(luc)}</td></tr>`;
+}
+document.querySelectorAll(".cin").forEach(i=>i.addEventListener("input",calcRender));
+$("cReset").onclick=()=>{try{localStorage.removeItem("calc_v1")}catch(e){}calcPreencher(CALC_PADRAO);calcRender()};
+calcPreencher(calcLer());calcRender();
+
 function rota(){
-  pagina=location.hash==="#suporte"?"suporte":"custos";
-  $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";
-  $("tabCustos").classList.toggle("on",pagina==="custos");$("tabSuporte").classList.toggle("on",pagina==="suporte");
-  document.body.classList.toggle("pg-suporte",pagina==="suporte");
+  pagina=location.hash==="#suporte"?"suporte":location.hash==="#calculadora"?"calc":"custos";
+  $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";
+  $("tabCustos").classList.toggle("on",pagina==="custos");$("tabSuporte").classList.toggle("on",pagina==="suporte");$("tabCalc").classList.toggle("on",pagina==="calc");
+  document.body.classList.toggle("pg-suporte",pagina==="suporte");document.body.classList.toggle("pg-calc",pagina==="calc");
   if(pagina==="suporte"){renderSup();loadSup()}
 }
 window.addEventListener("hashchange",rota);
