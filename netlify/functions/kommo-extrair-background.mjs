@@ -38,13 +38,13 @@ async function todas(path, chave) {
 
 async function apps(corpo, tent = 0) {
   try {
-    const r = await fetch(APPS, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "importar", token, ...corpo }), redirect: "follow" });
+    const r = await fetch(APPS, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "importar", segredo: process.env.IMPORT_SECRET, ...corpo }), redirect: "follow" });
     const t = await r.text();
     const j = JSON.parse(t);
     if (!j.ok) throw new Error(j.error || "Apps Script recusou");
     return j;
   } catch (e) {
-    if (tent < 3 && !/recente|Token/.test(e.message)) { await dorme(3000); return apps(corpo, tent + 1); }
+    if (tent < 3 && !/recente|Chave/.test(e.message)) { await dorme(3000); return apps(corpo, tent + 1); }
     throw e;
   }
 }
@@ -64,7 +64,7 @@ function fmtCampo(f) {
 }
 
 export default async () => {
-  if (!sub || !token) { console.log("Falta KOMMO_SUBDOMINIO / KOMMO_TOKEN no Netlify."); return; }
+  if (!sub || !token || !process.env.IMPORT_SECRET) { console.log("Falta KOMMO_SUBDOMINIO / KOMMO_TOKEN / IMPORT_SECRET no Netlify."); return; }
   try { await apps({ fase: "inicio" }); } catch (e) { console.log("Não iniciou:", e.message); return; }
   try {
     const pipes = await todas("leads/pipelines", "pipelines");

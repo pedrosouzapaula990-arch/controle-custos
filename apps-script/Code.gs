@@ -717,10 +717,9 @@ function pastaFotos_() {
 // ---- importação vinda do Netlify (a função busca no Kommo e envia aqui em partes) ----
 function importarKommo_(p) {
   const props = PropertiesService.getScriptProperties();
-  const meu = String(props.getProperty("KOMMO_TOKEN") || "").trim().replace(/^Bearer\s+/i, "");
-  const dele = String(p.token || "").trim().replace(/^Bearer\s+/i, "");
-  if (!meu) return { ok: false, error: "Token inválido: KOMMO_TOKEN não existe nas Propriedades do Apps Script" };
-  if (!dele || dele !== meu) return { ok: false, error: "Token inválido: o do Netlify é diferente do guardado no Apps Script" };
+  // autenticação própria da ponte Netlify→Apps Script (guardamos só o hash; a chave fica nas variáveis do Netlify)
+  const dig = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(p.segredo || "")).map(b => ("0" + (b & 255).toString(16)).slice(-2)).join("");
+  if (!p.segredo || dig !== "926df7157db3de0bda1e36325ec2ff020b1b0536dc4c2e579c049e21fb07174f") return { ok: false, error: "Chave da ponte inválida (IMPORT_SECRET do Netlify não confere)" };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
