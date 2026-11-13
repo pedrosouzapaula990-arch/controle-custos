@@ -248,6 +248,9 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
           <div class="field"><label for="c_imp">Imposto (% do faturamento)</label><input id="c_imp" class="cin" type="number" min="0" step="0.1"></div>
           <div></div>
         </div>
+        <div class="cgrp">Custos adicionais</div>
+        <div id="cExtras"></div>
+        <button id="cAdd" type="button">+ Adicionar custo</button>
         <div class="hint">Os valores que você mudar ficam salvos neste aparelho.</div>
       </div>
       <div class="card">
@@ -930,6 +933,12 @@ $("supList").addEventListener("click",async e=>{
 // ================== CALCULADORA ==================
 const CALC_PADRAO={c_cli:10000,c_tk:29.69,c_cr:4.20,c_mg:12,c_ad:1000,c_dias:30,c_cpa:30,c_rv:10,c_sup:15000,c_dsp:10000,c_imp:12};
 function calcLer(){let v={};try{v=JSON.parse(localStorage.getItem("calc_v1")||"{}")}catch(e){}return {...CALC_PADRAO,...v}}
+let calcExtras=[];
+function extrasLer(){try{const a=JSON.parse(localStorage.getItem("calc_extra_v1")||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
+function extrasSalvar(){try{localStorage.setItem("calc_extra_v1",JSON.stringify(calcExtras))}catch(e){}}
+function extrasDesenhar(){
+  $("cExtras").innerHTML=calcExtras.map((x,i)=>`<div class="row2" style="grid-template-columns:1fr 1fr auto;align-items:end"><div class="field"><label>Nome do custo</label><input class="cex" data-i="${i}" data-k="n" type="text" value="${String(x.n).replace(/"/g,"&quot;")}" placeholder="Ex.: Ferramenta, taxa..."></div><div class="field"><label>Valor (R$/mês)</label><input class="cex" data-i="${i}" data-k="v" type="number" min="0" step="0.01" value="${x.v}"></div><button type="button" data-cdel="${i}" title="Remover">✕</button></div>`).join("");
+}
 function calcPreencher(v){Object.keys(CALC_PADRAO).forEach(k=>$(k).value=v[k])}
 function calcRender(){
   const v={};Object.keys(CALC_PADRAO).forEach(k=>{const x=parseFloat(String($(k).value).replace(",","."));v[k]=isFinite(x)?x:0});
@@ -948,7 +957,7 @@ function calcRender(){
     ["Suporte",v.c_sup,"fixo mensal"],
     ["Disparos (API oficial)",v.c_dsp,"fixo mensal"],
     ["RV das vendas",rv,`${vendas.toLocaleString("pt-BR")} vendas × ${brl(v.c_rv)}`]
-  ];
+  ].concat(calcExtras.filter(x=>(+x.v||0)>0).map(x=>[String(x.n||"Custo adicional").replace(/</g,"&lt;"),+x.v||0,"custo adicional"]));
   const tot=itens.reduce((s,i)=>s+i[1],0),luc=fat-tot,pct=x=>fat>0?(x/fat*100).toFixed(1).replace(".",",")+"%":"—";
   $("kcFat").textContent=brl(fat);$("kcFatN").textContent=`${v.c_cli.toLocaleString("pt-BR")} clientes × ${brl(v.c_tk)}`;
   $("kcCus").textContent=brl(tot);$("kcCusN").textContent=pct(tot)+" do faturamento";
@@ -960,7 +969,11 @@ function calcRender(){
     +`<tr class="luc ${luc<0?"neg":""}"><td>Sobra (lucro)</td><td class="num">${brl(luc)}</td><td class="num">${pct(luc)}</td></tr>`;
 }
 document.querySelectorAll(".cin").forEach(i=>i.addEventListener("input",calcRender));
-$("cReset").onclick=()=>{try{localStorage.removeItem("calc_v1")}catch(e){}calcPreencher(CALC_PADRAO);calcRender()};
+$("cReset").onclick=()=>{try{localStorage.removeItem("calc_v1");localStorage.removeItem("calc_extra_v1")}catch(e){}calcPreencher(CALC_PADRAO);calcExtras=[];extrasDesenhar();calcRender()};
+$("cAdd").onclick=()=>{calcExtras.push({n:"",v:0});extrasSalvar();extrasDesenhar();const l=$("cExtras").querySelectorAll('input[data-k="n"]');if(l.length)l[l.length-1].focus()};
+$("cExtras").addEventListener("input",e=>{const t=e.target;if(!t.classList.contains("cex"))return;const x=calcExtras[+t.dataset.i];if(!x)return;x[t.dataset.k]=t.dataset.k==="v"?(parseFloat(String(t.value).replace(",","."))||0):t.value;extrasSalvar();calcRender()});
+$("cExtras").addEventListener("click",e=>{const b=e.target.closest("[data-cdel]");if(!b)return;calcExtras.splice(+b.dataset.cdel,1);extrasSalvar();extrasDesenhar();calcRender()});
+calcExtras=extrasLer();extrasDesenhar();
 calcPreencher(calcLer());calcRender();
 
 let dashSub="resumo";
