@@ -730,6 +730,7 @@ function importarKommo_(p) {
       props.setProperty("KOMMO_IMP_INICIO", String(Date.now()));
       props.setProperty("KOMMO_PUXANDO", String(Date.now()));
       props.setProperty("KOMMO_IMP_TXT", "Iniciando…");
+      props.setProperty("KOMMO_ERRO", "");
       Object.keys(KOMMO_FUNIS).forEach(k => { const t = sb.getSheetByName("_tmp " + KOMMO_FUNIS[k]); if (t) sb.deleteSheet(t); });
       return { ok: true };
     }
