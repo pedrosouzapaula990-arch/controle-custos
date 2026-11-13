@@ -17,6 +17,12 @@ export default async (req) => {
     if (!TIPOS_GRAVAVEIS.includes(it.tipo) || !/^(r|ck-|v-)/.test(String(it.id || ""))) return json({ ok: false, error: "não permitido" }, 403);
   }
   if (body.action === "delete" && (String(body.id || "").startsWith("__") || !/^(r|ck-|v-)/.test(String(body.id || "")))) return json({ ok: false, error: "não permitido" }, 403);
+  if (body.action === "puxarKommo") { // dispara a extração no site principal (o token fica só lá)
+    try {
+      const r = await fetch("https://controlegastos202.netlify.app/.netlify/functions/kommo-extrair-background", { method: "POST" });
+      return json({ ok: r.status < 300, error: r.status < 300 ? undefined : "Não consegui iniciar (HTTP " + r.status + ")" });
+    } catch (e) { return json({ ok: false, error: "Falha ao iniciar: " + e.message }); }
+  }
   try {
     const r = await fetch(API_URL, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify(body), redirect: "follow" });
     const txt = await r.text();

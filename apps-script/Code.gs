@@ -65,7 +65,8 @@ function executar_(action, p) {
   if (action === "list") return { ok: true, aba: nome, items: listar_(nome) };
   if (action === "validar") { const o = validar_(p); o.kommo = statusKommo_(); return o; }
   if (action === "kommoStatus") return statusKommo_();
-  if (action === "puxarKommo") return puxarBasesKommo();
+  if (action === "puxarKommo") return { ok: false, error: "A extração agora roda no Netlify." };
+  if (action === "importar") return importarKommo_(p);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -300,7 +301,8 @@ function garantirGatilhos_() {
   if (p.getProperty("GATILHOS_OK") === hoje) return;
   const ex = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
   if (ex.indexOf("fotoFimDoDia") < 0) ScriptApp.newTrigger("fotoFimDoDia").timeBased().everyDays(1).atHour(23).nearMinute(50).create();
-  if (ex.indexOf("puxarBasesKommo") < 0 && p.getProperty("KOMMO_TOKEN")) { try { configurarKommo(); } catch (e) {} }
+  // a extração do Kommo roda no Netlify: desliga os gatilhos antigos do Google (gastavam a cota diária)
+  ScriptApp.getProjectTriggers().filter(t => ["puxarBasesKommo", "continuarKommo"].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
   p.setProperty("GATILHOS_OK", hoje);
 }
 // Gatilho (a cada 5 min): recalcula só se as bases mudaram
@@ -712,11 +714,86 @@ function pastaFotos_() {
   const it = DriveApp.getFoldersByName(PASTA_FOTOS);
   return it.hasNext() ? it.next() : DriveApp.createFolder(PASTA_FOTOS);
 }
+// ---- importação vinda do Netlify (a função busca no Kommo e envia aqui em partes) ----
+function importarKommo_(p) {
+  const props = PropertiesService.getScriptProperties();
+  if (!p.token || String(p.token) !== String(props.getProperty("KOMMO_TOKEN"))) return { ok: false, error: "Token inválido" };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const tz = Session.getScriptTimeZone(), sb = basesSS_();
+    const fase = p.fase;
+    if (fase === "inicio") {
+      const ini = Number(props.getProperty("KOMMO_IMP_INICIO") || 0), ocupado = props.getProperty("KOMMO_PUXANDO");
+      if (ocupado && Date.now() - ini < 20 * 60 * 1000) return { ok: false, error: "Já existe uma extração em andamento (recente)." };
+      if (Date.now() - ini < 3 * 60 * 1000) return { ok: false, error: "Extração muito recente." };
+      props.setProperty("KOMMO_IMP_INICIO", String(Date.now()));
+      props.setProperty("KOMMO_PUXANDO", String(Date.now()));
+      props.setProperty("KOMMO_IMP_TXT", "Iniciando…");
+      Object.keys(KOMMO_FUNIS).forEach(k => { const t = sb.getSheetByName("_tmp " + KOMMO_FUNIS[k]); if (t) sb.deleteSheet(t); });
+      return { ok: true };
+    }
+    if (fase === "andamento") { props.setProperty("KOMMO_IMP_TXT", String(p.texto || "")); return { ok: true }; }
+    if (fase === "erro") {
+      props.setProperty("KOMMO_ERRO", String(p.mensagem || "erro"));
+      props.deleteProperty("KOMMO_PUXANDO");
+      return { ok: true };
+    }
+    const abas = Object.keys(KOMMO_FUNIS).map(k => KOMMO_FUNIS[k]);
+    if (fase === "parte") {
+      if (abas.indexOf(p.aba) < 0) return { ok: false, error: "Aba inválida" };
+      props.setProperty("KOMMO_IMP_TXT", String(p.texto || ""));
+      const linhas = p.linhas || [];
+      if (!linhas.length) return { ok: true };
+      const nome = "_tmp " + p.aba;
+      const sh = sb.getSheetByName(nome) || sb.insertSheet(nome);
+      const ini = Math.max(sh.getLastRow(), 0) + 1;
+      sh.getRange(ini, 1, linhas.length, COLS_EXPORT.length).setNumberFormat("@").setValues(linhas.map(r => COLS_EXPORT.map((_, i) => String(r[i] == null ? "" : r[i]))));
+      return { ok: true };
+    }
+    if (fase === "fim") {
+      const agora = new Date(), conf = [], resumo = [];
+      abas.forEach(aba => {
+        const tmp = sb.getSheetByName("_tmp " + aba);
+        const esperado = (p.contagens || {})[aba] || 0;
+        const linhas = tmp && tmp.getLastRow() ? tmp.getRange(1, 1, tmp.getLastRow(), COLS_EXPORT.length).getValues().map(r => r.map(String)) : [];
+        const ok = esperado > 0 && linhas.length === esperado;
+        if (!ok) { conf.push({ aba: aba, vazias: [], buscados: esperado, gravados: linhas.length, ok: false }); if (tmp) sb.deleteSheet(tmp); return; } // não troca a base antiga por dados incompletos
+        const sh = sb.getSheetByName(aba) || sb.insertSheet(aba);
+        sh.clearContents();
+        const dados = [COLS_EXPORT].concat(linhas);
+        sh.getRange(1, 1, dados.length, COLS_EXPORT.length).setNumberFormat("@").setValues(dados);
+        const csv = dados.map(r => r.map(v => { v = String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";")).join("\n");
+        const nomeArq = Utilities.formatDate(agora, tz, "yyyy-MM-dd_HHmm") + " - " + aba + ".csv";
+        pastaFotos_().createFile(Utilities.gzip(Utilities.newBlob(csv, "text/csv", nomeArq), nomeArq + ".gz"));
+        sb.deleteSheet(tmp);
+        resumo.push(aba + ": " + linhas.length + " leads");
+        const vazias = COLS_BASE.concat(COLS_OPC).filter(c => { const ix = COLS_EXPORT.indexOf(c); return ix >= 0 && linhas.length > 50 && !linhas.some(r => String(r[ix] || "").trim() !== ""); });
+        conf.push({ aba: aba, vazias: vazias, buscados: esperado, gravados: linhas.length, ok: true });
+      });
+      props.setProperty("KOMMO_VENDA_GANHA", JSON.stringify((p.vendaGanha || []).slice(0, 200)));
+      const completa = conf.length === abas.length && conf.every(x => x.ok);
+      const colVazias = conf.filter(x => x.vazias.length).map(x => x.aba + ": " + x.vazias.join(", "));
+      const quando = Utilities.formatDate(agora, tz, "dd/MM HH:mm");
+      if (completa) props.setProperty("KOMMO_ULTIMA", quando);
+      props.setProperty("KOMMO_CONF", JSON.stringify({ quando: quando, completa: completa, colunasVazias: colVazias.join(" | "),
+        campos: (p.campos || []).join(", "),
+        detalhe: completa ? "" : conf.filter(x => !x.ok).map(x => x.aba + ": Kommo entregou " + x.buscados + ", gravados " + x.gravados).join(" | ") }));
+      props.setProperty("KOMMO_ERRO", completa ? "" : "Extração incompleta; bases antigas mantidas.");
+      props.deleteProperty("KOMMO_PUXANDO");
+      const salvo = lerSalvo_();
+      calcularESalvar_(salvo ? (salvo.out.desde || "") : "");
+      return { ok: true, resumo: resumo.join(" | ") };
+    }
+    return { ok: false, error: "Fase desconhecida" };
+  } finally { lock.releaseLock(); }
+}
 function statusKommo_() {
   const pr = PropertiesService.getScriptProperties();
   const job = lerJob_();
+  const impIni = Number(pr.getProperty("KOMMO_IMP_INICIO") || 0), impAtivo = !!pr.getProperty("KOMMO_PUXANDO") && Date.now() - impIni < 20 * 60 * 1000;
   return { ok: true, configurado: !!(pr.getProperty("KOMMO_SUBDOMINIO") && pr.getProperty("KOMMO_TOKEN")),
-    puxando: !!job && Date.now() - job.inicio < 30 * 60 * 1000, andamento: job ? resumoJob_(job) : "",
+    puxando: impAtivo || (!!job && Date.now() - job.inicio < 30 * 60 * 1000), andamento: impAtivo ? (pr.getProperty("KOMMO_IMP_TXT") || "") : (job ? resumoJob_(job) : ""),
     ultima: pr.getProperty("KOMMO_ULTIMA") || "", erro: pr.getProperty("KOMMO_ERRO") || "",
     conferencia: (function () { try { return JSON.parse(pr.getProperty("KOMMO_CONF") || "null"); } catch (e) { return null; } })() };
 }

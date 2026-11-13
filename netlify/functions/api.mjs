@@ -10,6 +10,13 @@ const json = (obj, status = 200) =>
 export default async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "use POST" }, 405);
   const body = await req.text();
+  let acao = ""; try { acao = JSON.parse(body).action; } catch {}
+  if (acao === "puxarKommo") { // a extração roda aqui no Netlify (função em segundo plano)
+    try {
+      const r = await fetch(new URL("/.netlify/functions/kommo-extrair-background", req.url), { method: "POST" });
+      return json({ ok: r.status < 300, jaRodando: false, error: r.status < 300 ? undefined : "Não consegui iniciar (HTTP " + r.status + ")" });
+    } catch (e) { return json({ ok: false, error: "Falha ao iniciar: " + e.message }); }
+  }
   try {
     const r = await fetch(API_URL, {
       method: "POST",
