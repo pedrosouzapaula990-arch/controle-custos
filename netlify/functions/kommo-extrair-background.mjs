@@ -83,6 +83,7 @@ export default async () => {
       const leads = await todas("leads?with=contacts&" + filtro, "leads");
       const rows = [], vistos = new Set();
       for (const l of leads) {
+        if (l.id === 110674836) console.log("DIAG lead 110674836:", JSON.stringify((l.custom_fields_values || []).map(f => ({ n: f.field_name, id: f.field_id, t: f.field_type, v: f.values }))));
         if (vistos.has(l.id)) continue;
         vistos.add(l.id);
         const cf = {};
@@ -103,6 +104,7 @@ export default async () => {
         rows.push({ linha, contato: m ? m.id : null });
       }
       linhasPorAba[aba] = rows;
+      console.log("DIAG preenchimento " + aba + " (" + rows.length + "):", COLS.map((c, i) => c + "=" + rows.filter(r => String(r.linha[i]).trim() !== "").length).join(", "));
       contagens[aba] = rows.length;
       // venda ganha não deve ter clientes: guarda os que aparecerem (1ª página)
       const vg = await kommo(`leads?limit=250&filter[statuses][0][pipeline_id]=${p.id}&filter[statuses][0][status_id]=142`);
