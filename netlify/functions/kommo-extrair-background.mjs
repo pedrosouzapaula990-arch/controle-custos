@@ -17,7 +17,13 @@ const token = String(process.env.KOMMO_TOKEN || "").trim();
 const BASE = `https://${sub}.kommo.com/api/v4/`;
 
 async function kommo(path, tent = 0) {
-  const r = await fetch(BASE + path, { headers: { Authorization: "Bearer " + token } });
+  let r;
+  try { r = await fetch(BASE + path, { headers: { Authorization: "Bearer " + token } }); }
+  catch (e) {
+    const causa = (e.cause && (e.cause.code || e.cause.message)) || "";
+    if (tent < 6) { await dorme(2000 * (tent + 1)); return kommo(path, tent + 1); }
+    throw new Error("Falha de rede ao chamar o Kommo (" + path.split("?")[0] + "): " + e.message + (causa ? " / " + causa : ""));
+  }
   if (r.status === 204) return null;
   if (r.status === 429 && tent < 6) { await dorme(2000 * (tent + 1)); return kommo(path, tent + 1); }
   if (r.status === 401) throw new Error("Token do Kommo inválido ou expirado (401).");
@@ -44,8 +50,8 @@ async function apps(corpo, tent = 0) {
     if (!j.ok) throw new Error(j.error || "Apps Script recusou");
     return j;
   } catch (e) {
-    if (tent < 3 && !/recente|Chave/.test(e.message)) { await dorme(3000); return apps(corpo, tent + 1); }
-    throw e;
+    if (tent < 4 && !/recente|Chave/.test(e.message)) { await dorme(3000 * (tent + 1)); return apps(corpo, tent + 1); }
+    throw new Error("Apps Script (" + corpo.fase + "): " + e.message);
   }
 }
 
