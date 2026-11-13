@@ -717,7 +717,10 @@ function pastaFotos_() {
 // ---- importação vinda do Netlify (a função busca no Kommo e envia aqui em partes) ----
 function importarKommo_(p) {
   const props = PropertiesService.getScriptProperties();
-  if (!p.token || String(p.token) !== String(props.getProperty("KOMMO_TOKEN"))) return { ok: false, error: "Token inválido" };
+  const meu = String(props.getProperty("KOMMO_TOKEN") || "").trim().replace(/^Bearer\s+/i, "");
+  const dele = String(p.token || "").trim().replace(/^Bearer\s+/i, "");
+  if (!meu) return { ok: false, error: "Token inválido: KOMMO_TOKEN não existe nas Propriedades do Apps Script" };
+  if (!dele || dele !== meu) return { ok: false, error: "Token inválido: o do Netlify é diferente do guardado no Apps Script" };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
