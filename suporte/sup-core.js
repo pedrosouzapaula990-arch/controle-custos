@@ -164,7 +164,7 @@ const SupCore = (() => {
     const kom = !k ? "" : !k.configurado ? `<div class="hint" style="margin-top:4px">Kommo: ainda não configurado (as bases vêm coladas na planilha).</div>`
       : `${(function () { const c = k.conferencia; if (!c) return `<div class="hint" style="margin-top:6px"><span class="chip andamento">Extração</span> sem conferência ainda (aparece na próxima puxada do Kommo)</div>`;
         return `<div class="hint" style="margin-top:6px"><span class="chip ${c.completa ? "concluido" : "problema"}">${c.completa ? "✔ Extração completa" : "✖ Extração incompleta"}</span> extraída em <b>${esc(c.quando)}</b> · ativos e vencidos${c.completa ? " 100% gravados" : ": " + esc(c.detalhe)}</div>${c.colunasVazias ? `<div class="hint" style="color:var(--red)">⚠ Colunas sem nenhum valor vindo do Kommo — ${esc(c.colunasVazias)}. Campos vistos: ${esc(c.campos || "—")}</div>` : ""}`; })()}
-      <div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora" + (k.andamento ? ": " + esc(k.andamento) : "") + "…</b>" : "última puxada " + esc(k.ultima || "—")} · automático às 7h, 12h e 19h${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
+      <div class="hint" style="margin-top:4px">Kommo: ${k.puxando ? "<b>puxando agora" + (k.andamento ? ": " + esc(k.andamento) : "") + "…</b>" : "última puxada " + esc(k.ultima || "—")} · automático desligado (cole a base manual e clique em Recalcular)${k.erro ? ` · <span style="color:var(--red)">erro: ${esc(k.erro)}</span>` : ""}</div>`;
     return `<div class="chips" style="margin-bottom:4px">${b}</div>${quando}${kom}`;
   }
   function filtrarErros(res, marks, f) {
@@ -245,8 +245,8 @@ const SupCore = (() => {
     if (a.esperado != null) h += `<div class="card kpi"><div class="lbl">Esperado</div><div class="val">${n(a.esperado)}</div><div class="note">${n(a.inicioMes)} início + ${n(a.vendasMes)} vendas − ${n(a.naoRenovaram)} não renovaram</div></div>
       <div class="card kpi"><div class="lbl">Diferença</div><div class="val ${Math.abs(a.diferenca) > 20 ? "up" : ""}">${a.diferenca > 0 ? "+" : ""}${n(a.diferenca)}</div><div class="note">${a.diferenca === 0 ? "bate certinho" : "ativos hoje − esperado"}</div></div>`;
     h += `<div class="card kpi"><div class="lbl">Previsão fim do mês</div><div class="val">${n(a.previstoFimMes)}</div><div class="note">estimativa · renovação ${a.taxaRenovacao}% · ${a.diasRestantes} dia(s) restantes</div></div></div>`;
-    if (mov.entradas != null) h += `<div class="hint" style="margin-top:8px">Desde ${esc(mov.refInicio.split("-").reverse().join("/"))} (foto do Drive): <b>${n(mov.entradas)}</b> entraram (<b>${n(mov.reconquistas)}</b> reconquistas) · <b>${n(mov.saidas)}</b> saíram${mov.variacaoDia != null ? ` · variação vs ontem: <b>${mov.variacaoDia > 0 ? "+" : ""}${n(mov.variacaoDia)}</b>` : ""}.</div>`;
-    else h += `<div class="hint" style="margin-top:8px">As fotos diárias começaram agora; a comparação de entradas e saídas aparece a partir do próximo dia.${mov.movimentoErro ? " " + esc(mov.movimentoErro) : ""}</div>`;
+    if (mov.porBase && Object.keys(mov.porBase).length) h += `<div class="hint" style="margin-top:8px">Desde ${esc(mov.refInicio.split("-").reverse().join("/"))} (foto de referência): ${Object.entries(mov.porBase).map(([b, x]) => `<b>${esc(b)}</b>: ${n(x.entradas)} entraram (${n(x.reconquistas)} reconquistas) · ${n(x.saidas)} saíram`).join(" &nbsp;|&nbsp; ")}${mov.variacaoDia != null ? ` · variação vs ontem: <b>${mov.variacaoDia > 0 ? "+" : ""}${n(mov.variacaoDia)}</b>` : ""}.</div>`;
+    else h += `<div class="hint" style="margin-top:8px">A foto de referência é a de ${mov.refInicio ? esc(mov.refInicio.split("-").reverse().join("/")) : "hoje"} (base manual). A comparação de entradas e saídas, separada por base, aparece a partir do próximo dia.${mov.movimentoErro ? " " + esc(mov.movimentoErro) : ""}</div>`;
     if (a.esperado != null && Math.abs(a.diferenca) > 20) h += `<div class="hint">Diferença acima de 20: conferir cadastros sem data de vencimento, vendas sem data de cadastro ou clientes tabulados na etapa errada.</div>`;
     return h + `</div>`;
   }
@@ -351,7 +351,7 @@ const SupCore = (() => {
       const ren = meses.map(m => [mesCurto(m), (sr.renovMes || {})[m] || 0]);
       return htmlAtivos(res) + `<div class="grid2"><div class="card"><h2>Renovações por mês</h2>${barras(ren)}<div class="hint" style="margin-top:6px">Clientes com data de renovação em cada mês (as duas bases).</div></div>
         <div class="card"><h2>Ativos por base</h2>${barras(Object.entries(at.porBase || {}))}<div class="hint" style="margin-top:6px">A origem (campanha/indicação) precisa de um campo de origem no Kommo; ainda não vem nas bases.</div></div></div>
-        ${mov.entradas != null ? `<div class="card"><h2>Entraram (${n(mov.totalEntradas)})</h2>${tab(mov.entradasLista || [], "Ninguém entrou desde a foto de referência.")}</div><div class="card"><h2>Saíram (${n(mov.totalSaidas)})</h2>${tab(mov.saidasLista || [], "Ninguém saiu.")}</div>` : '<div class="card"><div class="hint">A lista de quem entrou e saiu aparece a partir da segunda foto diária (amanhã).</div></div>'}`;
+        ${mov.porBase && Object.keys(mov.porBase).length ? Object.entries(mov.porBase).map(([b, x]) => `<div class="card"><h2>${esc(b)} · Entraram (${n(x.totalEntradas)})</h2>${tab(x.entradasLista || [], "Ninguém entrou desde a foto de referência.")}</div><div class="card"><h2>${esc(b)} · Saíram (${n(x.totalSaidas)})</h2>${tab(x.saidasLista || [], "Ninguém saiu.")}</div>`).join("") : '<div class="card"><div class="hint">A lista de quem entrou e saiu, separada por base, aparece a partir da segunda foto diária (amanhã).</div></div>'}`;
     }
     return "";
   }

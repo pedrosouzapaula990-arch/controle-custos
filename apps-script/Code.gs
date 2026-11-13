@@ -232,48 +232,68 @@ function fotoDia_(data, criar) {
 }
 function lerFoto_(data) { const f = fotoDia_(data, false); if (!f) return null; try { const x = JSON.parse(f.getBlob().getDataAsString()); return x && x.a ? x : null; } catch (e) { return null; } }
 function fotoAtivos_(hoje, ids, tz) {
+  limparFotosAntigasUmaVez_();
   fotoDia_(hoje, true).setContent(JSON.stringify(ids));
-  const mes = hoje.slice(0, 7), ini = mes + "-01";
-  // referência de início do mês: a primeira foto do mês; senão a mais antiga disponível
+  const mes = hoje.slice(0, 7);
+  // referência de início do período: a primeira foto do mês (a de 13/11 foi a base manual, a primeira confiável)
   let refData = null, refFoto = null;
   for (let d = 1; d <= +hoje.slice(8, 10); d++) {
     const dd = mes + "-" + ("0" + d).slice(-2), f = lerFoto_(dd);
     if (f) { refData = dd; refFoto = f; break; }
   }
-  const mov = { fotoHoje: hoje, refInicio: refData, entradas: null, saidas: null, reconquistas: null, entradasLista: [], saidasLista: [] };
-  if (refFoto && refData !== hoje) {
-    const antes = {}; refFoto.a.forEach(i => antes[i] = 1);
-    const agora = {}; ids.a.forEach(i => agora[i] = 1);
-    const venc0 = {}; (refFoto.v || []).forEach(i => venc0[i] = 1);
-    const ent = ids.a.filter(i => !antes[i]), sai = refFoto.a.filter(i => !agora[i]);
-    mov.entradas = ent.length; mov.saidas = sai.length; mov.reconquistas = ent.filter(i => venc0[i]).length;
-    mov.entradasLista = ent; mov.saidasLista = sai; mov._venc0 = venc0;
-    mov.ativosRef = refFoto.a.length;
+  const mov = { fotoHoje: hoje, refInicio: refData, entradas: null, saidas: null, reconquistas: null, porBase: {} };
+  if (refFoto && refData !== hoje && refFoto.b) {
+    Object.keys(ids.b || {}).forEach(base => {
+      const r = refFoto.b[base]; if (!r) return;
+      const antes = {}; r.a.forEach(i => antes[i] = 1);
+      const agora = {}; ids.b[base].a.forEach(i => agora[i] = 1);
+      const venc0 = {}; (r.v || []).forEach(i => venc0[i] = 1);
+      const ent = ids.b[base].a.filter(i => !antes[i]), sai = r.a.filter(i => !agora[i]);
+      mov.porBase[base] = { entradas: ent.length, saidas: sai.length, reconquistas: ent.filter(i => venc0[i]).length, ativosRef: r.a.length,
+        entradasLista: ent, saidasLista: sai, _venc0: venc0 };
+    });
+    mov.entradas = Object.keys(mov.porBase).reduce((t, k) => t + mov.porBase[k].entradas, 0);
+    mov.saidas = Object.keys(mov.porBase).reduce((t, k) => t + mov.porBase[k].saidas, 0);
+    mov.reconquistas = Object.keys(mov.porBase).reduce((t, k) => t + mov.porBase[k].reconquistas, 0);
+    if (!Object.keys(mov.porBase).length) mov.entradas = null;
   }
-  // ontem
   const ont = new Date(Date.parse(hoje + "T12:00:00Z") - 86400000).toISOString().slice(0, 10), fo = lerFoto_(ont);
   if (fo) { mov.ontemAtivos = fo.a.length; mov.variacaoDia = ids.a.length - fo.a.length; }
   return mov;
 }
+// Uma vez só: apaga as fotos diárias anteriores a 13/11/2026 (vieram da extração pela API, que estava incompleta).
+// A foto de 13/11 (base manual) passa a ser a referência do mês.
+function limparFotosAntigasUmaVez_() {
+  const pr = PropertiesService.getScriptProperties();
+  if (pr.getProperty("FOTOS_RESET_1113")) return;
+  const it = pasta_().getFiles();
+  while (it.hasNext()) {
+    const f = it.next(), m = f.getName().match(/^ativos-(\d{4}-\d{2}-\d{2})\.json$/);
+    if (m && m[1] < "2026-11-13") f.setTrashed(true);
+  }
+  pr.setProperty("FOTOS_RESET_1113", "1");
+}
 // Transforma as listas de IDs (entrou / saiu) em linhas com nome, etapa, vendedor, vencimento e o motivo provável
 function detalharMovimento_(mov, bases, hoje) {
-  if (!mov || mov.entradasLista == null) return;
-  const venc0 = mov._venc0 || {}; delete mov._venc0;
+  if (!mov || !mov.porBase) return;
   const mes = hoje.slice(0, 7), idx = {};
   const iso = s => { s = String(s || "").trim(); const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/); return m ? m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2) : ""; };
-  bases.forEach(b => { if (!b.n || !b.cols.ID) return; for (let r = 0; r < b.n; r++) idx[b.cols.ID[r]] = { b: b, r: r }; });
-  const linha = (id, tipo) => {
-    const x = idx[id]; if (!x) return { id: id, cliente: "", base: "", etapa: "(fora das bases)", vendedor: "", venc: "", motivo: tipo === "saiu" ? "Saiu das bases (duplicado, venda perdida ou ganha)" : "Não encontrado" };
-    const g = c => String((x.b.cols[c] || [])[x.r] || "").trim();
-    const dc = iso(g("Data Cadastro")), dr = iso(g("Data Renovação")), dv = iso(g("Data de Vencimento"));
-    let motivo;
-    if (tipo === "entrou") motivo = venc0[id] ? "Reconquista (estava vencido)" : dc && dc.slice(0, 7) === mes ? "Venda nova" : dr && dr.slice(0, 7) === mes ? "Renovação" : "Vencimento alterado / cliente novo na base";
-    else motivo = dv && dv < hoje ? "Venceu e não renovou" : "Vencimento alterado / mudou de etapa";
-    return { id: id, cliente: g("Contato principal"), base: x.b.nome, etapa: g("Etapa do lead"), vendedor: g("Vendedor"), venc: dv, motivo: motivo };
-  };
-  const cortar = (l, t) => l.slice(0, 800).map(id => linha(id, t));
-  mov.totalEntradas = mov.entradasLista.length; mov.totalSaidas = mov.saidasLista.length;
-  mov.entradasLista = cortar(mov.entradasLista, "entrou"); mov.saidasLista = cortar(mov.saidasLista, "saiu");
+  bases.forEach(b => { if (!b.n || !b.cols.ID) return; idx[b.nome] = {}; for (let r = 0; r < b.n; r++) idx[b.nome][b.cols.ID[r]] = { b: b, r: r }; });
+  Object.keys(mov.porBase).forEach(base => {
+    const pb = mov.porBase[base], venc0 = pb._venc0 || {}; delete pb._venc0;
+    const linha = (id, tipo) => {
+      const x = (idx[base] || {})[id]; if (!x) return { id: id, cliente: "", base: base, etapa: "(fora da base)", vendedor: "", venc: "", motivo: tipo === "saiu" ? "Saiu da base (duplicado, venda perdida ou ganha)" : "Não encontrado" };
+      const g = c => String((x.b.cols[c] || [])[x.r] || "").trim();
+      const dc = iso(g("Data Cadastro")), dr = iso(g("Data Renovação")), dv = iso(g("Data de Vencimento"));
+      let motivo;
+      if (tipo === "entrou") motivo = venc0[id] ? "Reconquista (estava vencido)" : dc && dc.slice(0, 7) === mes ? "Venda nova" : dr && dr.slice(0, 7) === mes ? "Renovação" : "Vencimento alterado / cliente novo na base";
+      else motivo = dv && dv < hoje ? "Venceu e não renovou" : "Vencimento alterado / mudou de etapa";
+      return { id: id, cliente: g("Contato principal"), base: base, etapa: g("Etapa do lead"), vendedor: g("Vendedor"), venc: dv, motivo: motivo };
+    };
+    pb.totalEntradas = pb.entradasLista.length; pb.totalSaidas = pb.saidasLista.length;
+    pb.entradasLista = pb.entradasLista.slice(0, 800).map(id => linha(id, "entrou"));
+    pb.saidasLista = pb.saidasLista.slice(0, 800).map(id => linha(id, "saiu"));
+  });
 }
 // Início do mês automático: ativos da Base Darb Oficial na foto do último dia do mês anterior
 // (se não houver, a primeira foto do mês; se não houver, o valor fixo informado).
@@ -345,7 +365,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
   const erros = [], infoBases = [];
   const fimMes = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7), 0)).getUTCDate();
   const diaHoje = +hoje.slice(8, 10);
-  const ativosIds = [], vencidosIds = [];
+  const ativosIds = [], vencidosIds = [], idsB = {};
   const ativ = { agora: 0, porBase: {}, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0, vendasHoje: 0 };
   const vend = {}, detAt = {}, serie = { vendasDia: {}, vendasMes: {}, renovMes: {}, porBase: {} };
 
@@ -376,6 +396,8 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
       const dB = detAt[b.nome] = detAt[b.nome] || { agora: 0, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0 };
       if (dvA) {
         const idA = v("ID");
+        const ib = idsB[b.nome] = idsB[b.nome] || { a: [], v: [] };
+        (dvA >= hoje ? ib.a : ib.v).push(idA);
         if (dvA >= hoje) { ativ.agora++; ativ.porBase[b.nome] = (ativ.porBase[b.nome] || 0) + 1; ativosIds.push(idA);
           dB.agora++; if (dvA.slice(0, 7) === mesAtual && dvA > hoje) { ativ.venceRestoMes++; dB.venceRestoMes++; } }
         else { vencidosIds.push(idA); if (dvA.slice(0, 7) === mesAtual) { ativ.naoRenovaram++; dB.naoRenovaram++; } }
@@ -442,7 +464,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
     diferenca: esperado == null ? null : D.agora - esperado, renovados: D.renovados, taxaRenovacao: Math.round(taxaRen * 1000) / 10,
     venceRestoMes: D.venceRestoMes, diasRestantes: diasRest, previstoFimMes: prevFim, diaDoMes: diaHoje };
   return { mes: mesAtual, hoje: hoje, desde: desde || "", bases: infoBases, consumo: consumo, consumoDesde: consumoDesde, erros: erros,
-    ativos: ativos, vendedores: vend, serie: serie, _ids: { a: ativosIds, v: vencidosIds, n: ativ.porBase } };
+    ativos: ativos, vendedores: vend, serie: serie, _ids: { a: ativosIds, v: vencidosIds, n: ativ.porBase, b: idsB } };
 }
 
 // ===================== API DO KOMMO =====================
