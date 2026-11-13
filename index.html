@@ -263,7 +263,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
     <div class="banner" id="dashBanner"></div>
     <div class="subtabs">
       <button data-dsub="resumo" class="on">Resumão</button><button data-dsub="credito">Crédito</button><button data-dsub="vendas">Vendas</button>
-      <button data-dsub="trafego">Tráfego pago</button><button data-dsub="ativos">Clientes ativos</button>
+      <button data-dsub="trafego">Tráfego pago</button><button data-dsub="ativos">Clientes ativos</button><button data-dsub="meta">Meta de clientes</button>
     </div>
     <div id="dashBox"><div class="empty">Carregando…</div></div>
   </div>
@@ -443,7 +443,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794515873"></script>
+<script src="suporte/sup-core.js?v=1794585844"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -964,10 +964,12 @@ $("cReset").onclick=()=>{try{localStorage.removeItem("calc_v1")}catch(e){}calcPr
 calcPreencher(calcLer());calcRender();
 
 let dashSub="resumo";
+function metaLer(){try{const m=JSON.parse(localStorage.getItem("meta_v1")||"null");if(m&&m.alvo&&m.mes)return m}catch(e){}const d=new Date();d.setMonth(d.getMonth()+2);return {alvo:10000,mes:ym(d)}}
 function renderDash(){
   document.querySelectorAll("[data-dsub]").forEach(b=>b.classList.toggle("on",b.dataset.dsub===dashSub));
   const key=ym(new Date());
-  $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,custos:items.filter(i=>(i.data||"").startsWith(key))});
+  $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:metaLer(),custos:items.filter(i=>(i.data||"").startsWith(key))});
+  if(dashSub==="meta"&&$("mtAlvo")){const upd=()=>{const m={alvo:+$("mtAlvo").value||0,mes:$("mtMes").value};try{localStorage.setItem("meta_v1",JSON.stringify(m))}catch(e){}$("metaOut").innerHTML=SupCore.htmlMeta(valRes,m)};$("mtAlvo").oninput=upd;$("mtMes").oninput=upd}
 }
 document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
 $("dashAtual").onclick=()=>{load();loadSup().then(()=>loadVal(true))};

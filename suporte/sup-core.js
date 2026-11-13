@@ -329,6 +329,9 @@ const SupCore = (() => {
         <div class="card"><h2>Atenção</h2>${av.length ? av.map(x => `<div class="hint" style="margin:5px 0">⚠️ ${x}</div>`).join("") : '<div class="hint">Nada fora do normal agora. ✔</div>'}</div>
         <div class="hint" style="margin-top:8px">Bases de ${esc(res.basesAlteradas || "—")} · cálculo de ${esc(res.calculadoEm || "—")}.</div>`;
     }
+    if (sub === "meta") { const mt = c.meta || {};
+      return `<div class="card"><div class="grid2" style="margin:0"><div class="field"><label for="mtAlvo">Quero ter quantos clientes?</label><input id="mtAlvo" type="number" min="0" step="100" value="${esc(mt.alvo)}"></div>
+        <div class="field"><label for="mtMes">Quero chegar nisso até o mês de</label><input id="mtMes" type="month" value="${esc(mt.mes)}"></div></div></div><div id="metaOut">${htmlMeta(res, mt)}</div>`; }
     if (sub === "credito") return htmlCredito(res, c.recargas, false, true);
     if (sub === "vendas") {
       const dias = Object.entries(sr.vendasDia || {}).sort().map(([d, v]) => [d.slice(8, 10) + "/" + d.slice(5, 7), v]);
@@ -351,6 +354,43 @@ const SupCore = (() => {
         ${mov.entradas != null ? `<div class="card"><h2>Entraram (${n(mov.totalEntradas)})</h2>${tab(mov.entradasLista || [], "Ninguém entrou desde a foto de referência.")}</div><div class="card"><h2>Saíram (${n(mov.totalSaidas)})</h2>${tab(mov.saidasLista || [], "Ninguém saiu.")}</div>` : '<div class="card"><div class="hint">A lista de quem entrou e saiu aparece a partir da segunda foto diária (amanhã).</div></div>'}`;
     }
     return "";
+  }
+
+  // ---------- META DE CLIENTES ----------
+  // A = ativos hoje; perda diária = A × (1 − renovação) / 30; vendas/dia v para chegar em T em D dias: A·q^D + v·(1−q^D)/(1−q) = T, q = 1 − perda/30
+  function calcMeta(res, alvo, mesAlvo) {
+    const at = res && res.ativos; if (!at || !/^\d{4}-\d{2}$/.test(mesAlvo || "") || !(alvo > 0)) return null;
+    const [y, m] = mesAlvo.split("-").map(Number), fim = new Date(Date.UTC(y, m, 0)), [hy, hm, hd] = res.hoje.split("-").map(Number);
+    const D = Math.round((fim - new Date(Date.UTC(hy, hm - 1, hd))) / 86400000);
+    const A = at.agora, r = Math.min(1, Math.max(0, (at.taxaRenovacao != null ? at.taxaRenovacao : 100) / 100)), c = 1 - r, ch = c / 30;
+    const q = 1 - ch, mantem = A * ch;
+    let v = null, fimRitmo = null;
+    const ritmo = at.vendasMes / Math.max(1, hd);
+    if (D > 0) {
+      const qD = Math.pow(q, D);
+      v = ch === 0 ? (alvo - A) / D : (alvo - A * qD) * (1 - q) / (1 - qD);
+      fimRitmo = ch === 0 ? A + ritmo * D : A * qD + ritmo * (1 - qD) / (1 - q);
+    }
+    return { A: A, r: r, perdaDia: mantem, perdaMes: A * c, mantem: mantem, D: D, vNecessario: v, ritmo: ritmo, fimRitmo: fimRitmo, totalVendas: v == null ? null : Math.max(0, v) * D, fim: fim, alvo: alvo };
+  }
+  function htmlMeta(res, cfg) {
+    if (!res || !res.ativos) return '<div class="empty">Carregando os números das bases…</div>';
+    const x = calcMeta(res, +cfg.alvo, cfg.mes); if (!x) return '<div class="hint">Informe a meta e o mês.</div>';
+    const n = v => Math.round(+v || 0).toLocaleString("pt-BR"), n1 = v => (Math.round((+v || 0) * 10) / 10).toLocaleString("pt-BR");
+    const k = (l, v, note, cls) => `<div class="card kpi"><div class="lbl">${l}</div><div class="val ${cls || ""}">${v}</div><div class="note">${note || ""}</div></div>`;
+    const dataFim = x.fim.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+    let sit;
+    if (x.D <= 0) sit = '<div class="banner" style="display:block">Esse mês já passou. Escolha o mês atual ou um mês futuro.</div>';
+    else if (x.alvo <= x.A && x.vNecessario <= 0) sit = `<div class="hint" style="margin:8px 0">✔ Você já está acima da meta. Para só manter os ${n(x.A)} clientes, precisa de cerca de <b>${n1(x.mantem)}</b> vendas por dia.</div>`;
+    else {
+      const dif = x.ritmo - x.vNecessario, ok = dif >= 0;
+      sit = `<div class="${ok ? "hint" : "banner"}" style="${ok ? "margin:8px 0" : "display:block"}">${ok ? "✔ No ritmo atual você bate a meta." : "⚠️ Abaixo do ritmo necessário."} Hoje você vende <b>${n1(x.ritmo)}</b>/dia e precisa de <b>${n1(x.vNecessario)}</b>/dia (${ok ? "sobra" : "faltam"} <b>${n1(Math.abs(dif))}</b>/dia). No ritmo atual chega a <b>${n(x.fimRitmo)}</b> clientes em ${dataFim}.</div>`;
+    }
+    return `<div class="kpis">${k("Clientes ativos hoje", n(x.A), "Base Darb Oficial")}${k("Renovação do mês", n1(x.r * 100) + "%", "perde " + n1((1 - x.r) * 100) + "% por mês")}
+      ${k("Perda por dia", n1(x.perdaDia), "≈ " + n(x.perdaMes) + " clientes por mês")}${k("Vendas/dia para não cair", n1(x.mantem), "só para manter a base")}</div>
+      <div class="kpis">${k("Meta", n(x.alvo), "até " + dataFim)}${k("Vendas/dia para chegar lá", x.vNecessario == null ? "—" : n1(Math.max(0, x.vNecessario)), x.D > 0 ? x.D + " dia(s) restantes" : "")}
+      ${k("Total de vendas necessárias", x.totalVendas == null ? "—" : n(x.totalVendas), "até a data")}${k("Ritmo atual", n1(x.ritmo), "vendas/dia neste mês")}</div>${sit}
+      <div class="hint">Conta simples: a perda usa a renovação do mês até agora e supõe que todo cliente renova uma vez por mês. É uma estimativa para acompanhar o ritmo.</div>`;
   }
 
   // Botão "Puxar do Kommo": dispara e acompanha até terminar (a puxada leva ~1-2 min)
@@ -383,5 +423,5 @@ const SupCore = (() => {
     return l.join("\n");
   }
   return { DEF, TURNOS, ST, VST, LIMITE, minAgora, hm2min, turnoDe, horaDe, disparos, resp, tarefas, parseDados, tarefasDoDia, ckId, htmlChecklist, renderHora, textoWhats, curto,
-    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlQualidadeVendedor, htmlAtivos, htmlDashboard, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
+    puxarKommo, vId, filtrarErros, kpisValidacao, htmlListaValidacao, htmlPorVendedor, htmlQualidadeVendedor, htmlAtivos, htmlDashboard, htmlMeta, calcMeta, htmlBasesInfo, infoSaldo, calcSaldo, htmlCredito };
 })();
