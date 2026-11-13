@@ -286,8 +286,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
     </header>
     <div class="banner" id="supBanner"></div>
     <div class="subtabs">
-      <button data-ssub="check" class="on">Checklist do dia</button>
-      <button data-ssub="hora">Hora a hora</button>
+      <button data-ssub="hora" class="on">Hora a hora</button>
       <button data-ssub="valid">Validação</button>
       <button data-ssub="cred">Crédito e ativos</button>
     </div>
@@ -769,7 +768,7 @@ function atrasado(nome,st){
   const a=new Date();return a.getHours()*60+a.getMinutes()>h+15;
 }
 const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
-let supMarks=[],supRecargas=[],valRes=null,valCarregando=false,supChecks=[],supSub="check",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
+let supMarks=[],supRecargas=[],valRes=null,valCarregando=false,supChecks=[],supSub="hora",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
 let supDia=hoje();
 function supCfgAtual(){return {...(supCfg||{}),disparos:[...supDisparos()],resp:[...supResp()],tarefas:[...SupCore.tarefas(supCfg)]}}
 function supDisparos(){const l=[...(supCfg?.disparos||SUP_DEF.disparos)];return l.sort((a,b)=>(horaDisparo(a)??9999)-(horaDisparo(b)??9999))}
