@@ -185,7 +185,8 @@ const SupCore = (() => {
     const all = filtrarErros(res, marks, {});
     const pend = all.filter(e => !e.marca);
     return { erros: pend.filter(e => e.nivel === "erro").length, alertas: pend.filter(e => e.nivel === "alerta").length,
-      tratados: all.length - pend.length, total: all.length,
+      // Tratados = tudo que foi marcado no mês (registro permanente): não some quando o lead é corrigido e o erro deixa de aparecer
+      tratados: (marks || []).filter(m => m && String(m.data || "").slice(0, 7) === String(res?.mes || "")).length, total: all.length,
       vendErros: all.filter(e => e.marca?.status === "vendedor").length };
   }
   // Agrupa os pontos por lead: um lead com vários problemas aparece uma vez só

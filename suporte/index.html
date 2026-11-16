@@ -324,7 +324,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794844330"></script>
+<script src="sup-core.js?v=1794851804"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -365,7 +365,7 @@ function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);
   if(!valRes){return}
   const k=SupCore.kpisValidacao(valRes,marks);
-  $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="de "+k.total+" pontos";$("vVend").textContent=k.vendErros;
+  $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="no mês · fica registrado ("+k.total+" pontos na lista)";$("vVend").textContent=k.vendErros;
   const tipos=[...new Set(valRes.erros.map(e=>e.tipo))].sort();const tp=$("fvTp").value;
   $("fvTp").innerHTML='<option value="">Todos os tipos</option>'+tipos.map(t=>`<option ${t===tp?"selected":""}>${esc(t)}</option>`).join("");
   const lista=SupCore.filtrarErros(valRes,marks,{status:$("fvSt").value,nivel:$("fvNv").value,tipo:$("fvTp").value,base:$("fvBase").value});

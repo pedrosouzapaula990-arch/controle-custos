@@ -449,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794844330"></script>
+<script src="suporte/sup-core.js?v=1794851804"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -892,7 +892,7 @@ async function loadVal(forcar,tent){
 function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);if(!valRes)return;
   const k=SupCore.kpisValidacao(valRes,supMarks);
-  $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="de "+k.total+" pontos";$("vVend").textContent=k.vendErros;
+  $("vErr").textContent=k.erros;$("vErr").className="val"+(k.erros?" up":"");$("vAl").textContent=k.alertas;$("vTrat").textContent=k.tratados;$("vTotN").textContent="no mês · fica registrado ("+k.total+" pontos na lista)";$("vVend").textContent=k.vendErros;
   $("vPorVend").innerHTML=SupCore.htmlPorVendedor(valRes,supMarks);$("vQual").innerHTML=SupCore.htmlQualidadeVendedor(valRes);
   const opt=(id,vals,todos)=>{const cur=$(id).value;$(id).innerHTML=`<option value="">${todos}</option>`+vals.map(t=>`<option ${t===cur?"selected":""}>${esc(t)}</option>`).join("")};
   opt("fvTp",[...new Set(valRes.erros.map(e=>e.tipo))].sort(),"Todos os tipos");
