@@ -353,7 +353,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   <form class="modal" id="formCr">
     <h3>Registrar créditos</h3>
     <div class="field"><label for="crTipo">Tipo</label>
-      <select id="crTipo"><option value="recarga">Recarga (créditos comprados)</option><option value="saldo">Saldo atual no início do dia</option></select></div>
+      <select id="crTipo"><option value="recarga">Recarga (créditos comprados)</option><option value="saldo_agora">Saldo de agora (o que está no painel)</option><option value="saldo_inicio">Saldo no início do dia (antes dos disparos)</option></select></div>
     <div class="row2">
       <div class="field"><label for="crData">Data</label><input id="crData" type="date" required></div>
       <div class="field"><label for="crQt">Créditos</label><input id="crQt" type="number" min="0" inputmode="numeric" required></div>
@@ -445,7 +445,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794834148"></script>
+<script src="suporte/sup-core.js?v=1794840406"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -901,7 +901,8 @@ $("vAtual").onclick=()=>loadVal(true);
 $("vKommo").onclick=()=>SupCore.puxarKommo((a,p)=>api(a,{aba:"Suporte",...(p||{})}),$("vKommo"),showSupBanner,()=>loadVal(true));
 $("crBox").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
-  if(b.id==="crAdd"){$("crTipo").value=SupCore.infoSaldo(supRecargas).ultSaldo?"recarga":"saldo";$("crData").value=hoje();$("crQt").value="";$("crObs").value="";$("crErr").textContent="";$("ovCr").classList.add("open");return}
+  if(b.id==="crSaldo"){$("crTipo").value="saldo_agora";$("crData").value=hoje();$("crQt").value="";$("crObs").value="";$("crErr").textContent="";$("ovCr").classList.add("open");return}
+  if(b.id==="crAdd"){$("crTipo").value=SupCore.infoSaldo(supRecargas).ultSaldo?"recarga":"saldo_agora";$("crData").value=hoje();$("crQt").value="";$("crObs").value="";$("crErr").textContent="";$("ovCr").classList.add("open");return}
   if(b.dataset.crdel){
     if(b.dataset.conf!=="1"){b.dataset.conf="1";b.textContent="Excluir?";return}
     b.disabled=true;try{await api("delete",{aba:"Suporte",id:b.dataset.crdel});await loadSup();valRes=null;await loadVal(false)}catch(err){showSupBanner(err.message)}
@@ -910,7 +911,7 @@ $("crBox").addEventListener("click",async e=>{
 $("formCr").addEventListener("submit",async e=>{
   e.preventDefault();$("crSave").disabled=true;
   try{
-    await api("save",{aba:"Suporte",item:{id:"cr-"+Date.now().toString(36),tipo:"recarga",data:$("crData").value,hora:"",responsavel:"",fila:0,total:+$("crQt").value||0,status:$("crTipo").value,dados:"",obs:$("crObs").value.trim(),criadoEm:Date.now()}});
+    await api("save",{aba:"Suporte",item:{id:"cr-"+Date.now().toString(36),tipo:"recarga",data:$("crData").value,hora:"",responsavel:"",fila:0,total:+$("crQt").value||0,status:$("crTipo").value==="recarga"?"recarga":"saldo",dados:$("crTipo").value==="saldo_agora"?"agora":"",obs:$("crObs").value.trim(),criadoEm:Date.now()}});
     $("ovCr").classList.remove("open");await loadSup();valRes=null;await loadVal(false);
   }catch(err){$("crErr").textContent="Não foi possível salvar: "+err.message}
   finally{$("crSave").disabled=false}

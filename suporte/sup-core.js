@@ -256,7 +256,9 @@ const SupCore = (() => {
   function infoSaldo(recargas) {
     const l = [...(recargas || [])].sort((a, b) => (a.data + (a.criadoEm || 0)).localeCompare(b.data + (b.criadoEm || 0)));
     const ultSaldo = [...l].reverse().find(r => r.status === "saldo");
-    const desde = ultSaldo ? ultSaldo.data : null;
+    // "saldo agora" (lido no painel, já sem o consumo do dia) conta o consumo a partir do dia seguinte; "início do dia" conta do próprio dia
+    const prox = d => new Date(Date.parse(d + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
+    const desde = ultSaldo ? (ultSaldo.dados === "agora" ? prox(ultSaldo.data) : ultSaldo.data) : null;
     const recargasDepois = l.filter(r => r.status === "recarga" && (!ultSaldo || r.data > ultSaldo.data || (r.data === ultSaldo.data && (+r.criadoEm || 0) > (+ultSaldo.criadoEm || 0))));
     return { ultSaldo, desde, somaRecargas: recargasDepois.reduce((s, r) => s + (+r.total || 0), 0) };
   }
@@ -265,12 +267,20 @@ const SupCore = (() => {
     if (!inf.ultSaldo || !res || res.consumoDesde == null || res.desde !== inf.desde) return null;
     return (+inf.ultSaldo.total || 0) + inf.somaRecargas - res.consumoDesde;
   }
+  // média diária: últimos 7 dias fechados (sem hoje); se não houver dados, a média do mês
+  function mediaDia(c, res) {
+    const pd = c.porDia || {}, vals = [];
+    for (let i = 1; i <= 7; i++) { const d = new Date(Date.parse(res.hoje + "T12:00:00Z") - i * 86400000).toISOString().slice(0, 10); if (d.slice(0, 7) === res.mes) vals.push(pd[d] || 0); }
+    if (vals.length >= 3) return vals.reduce((a, b) => a + b, 0) / vals.length;
+    return c.total / Math.max(1, +res.hoje.slice(8, 10));
+  }
   function prevCred(saldo, c, res) {
-    const dia = +res.hoje.slice(8, 10), media = c.total / Math.max(1, dia);
+    const media = mediaDia(c, res);
     if (saldo == null || media <= 0) return "—";
     if (saldo <= LIMITE) return "já no limite";
     const d = Math.floor((saldo - LIMITE) / media);
-    return d + " dia(s)";
+    const quando = new Date(Date.parse(res.hoje + "T12:00:00Z") + d * 86400000).toISOString().slice(5, 10).split("-").reverse().join("/");
+    return d + " dia(s) · até " + quando;
   }
   function htmlCredito(res, recargas, owner, semAtivos) {
     const c = res?.consumo; if (!c) return '<div class="empty">Buscando o último cálculo das bases…</div>';
@@ -287,16 +297,20 @@ const SupCore = (() => {
       ${k("Vendas", n(c.vendas), n(c.linhasVendas) + " cliente(s)")}
       ${k("Renovações", n(c.renovacoes), n(c.linhasRenovacoes) + " cliente(s)")}
       ${k("Previsão do crédito", prevCred(saldo, c, res), "dias até chegar em " + LIMITE)}
-      ${k("Saldo estimado", saldo == null ? "—" : n(saldo), saldo == null ? (owner ? "Registre o saldo atual abaixo" : "Saldo ainda não informado") : "desde " + inf.desde.split("-").reverse().join("/") + " · limite " + LIMITE, alerta ? "up" : "")}
-    </div>`;
+      ${k("Saldo estimado", saldo == null ? "—" : n(saldo), saldo == null ? (owner ? "Informe o saldo atual abaixo" : "Saldo ainda não informado") : "informado em " + inf.ultSaldo.data.split("-").reverse().join("/") + " (" + n(inf.ultSaldo.total) + ") · limite " + LIMITE, alerta ? "up" : "")}
+      ${k("Média por dia", n(Math.round(mediaDia(c, res))), "últimos 7 dias fechados")}
+      ${k("Recargas no mês", n((recargas || []).filter(r => r.status === "recarga" && String(r.data || "").slice(0, 7) === res.mes).reduce((a, r) => a + (+r.total || 0), 0)), "créditos comprados em " + mesNome)}
+    </div>${owner ? `<div style="margin:6px 0 12px"><button class="primary" id="crSaldo">Informar saldo de agora</button> <span class="hint">Leia o saldo no painel e informe. O site desconta o consumo daí em diante e avisa quando chegar perto de ${LIMITE}.</span></div>` : ""}`;
     const bars = obj => { const e = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]); const mx = e.length ? e[0][1] : 1;
       return e.map(([k2, v]) => `<div class="bar-row"><div class="name" title="${esc(k2)}">${esc(k2)}</div><div class="bar-track"><div class="bar" style="width:${Math.max(2, v / mx * 100)}%"></div></div><div class="v">${n(v)}</div></div>`).join("") || '<div class="empty">Sem consumo.</div>'; };
     html += `<div class="grid2"><div class="card"><h2>Consumo por servidor</h2>${bars(c.porServidor)}</div><div class="card"><h2>Consumo por base</h2>${c.detalheBase ? `<table class="dtab"><tr><td class="hint">Base</td><td class="hint num">Vendas</td><td class="hint num">Renovações</td><td class="hint num">Total</td></tr>${Object.entries(c.detalheBase).map(([nm, d]) => `<tr><td><b>${esc(nm)}</b></td><td class="num">${n(d.vendas)}<div class="hint">${n(d.clientesVendas)} cli.</div></td><td class="num">${n(d.renovacoes)}<div class="hint">${n(d.clientesRenovacoes)} cli.</div></td><td class="num"><b>${n(d.vendas + d.renovacoes)}</b></td></tr>`).join("")}<tr><td><b>Total</b></td><td class="num"><b>${n(c.vendas)}</b></td><td class="num"><b>${n(c.renovacoes)}</b></td><td class="num"><b>${n(c.total)}</b></td></tr></table>` : bars(c.porBase)}
       <div class="hint" style="margin-top:10px">Cada cliente vale telas × meses do plano. Telas ou plano vazio contam como 1. Duplicados ficam de fora.</div></div></div>`;
+    const dias = Object.entries(c.porDia || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    html += `<div class="card"><h2>Consumo por dia (${esc(mesNome)})</h2>${dias.length ? `<div style="max-height:40vh;overflow-y:auto"><table class="dtab"><tr><td class="hint">Dia</td><td class="hint num">Créditos</td></tr>${dias.map(([d, v]) => `<tr><td>${esc(d.split("-").reverse().join("/"))}${d === res.hoje ? ' <span class="hint">(hoje, parcial)</span>' : ""}</td><td class="num"><b>${n(v)}</b></td></tr>`).join("")}</table></div>` : '<div class="empty">Sem consumo registrado no mês.</div>'}<div class="hint" style="margin-top:6px">Vendas pela data de cadastro e renovações pela data de renovação, cada uma vale telas × meses do plano.</div></div>`;
     const lst = [...(recargas || [])].sort((a, b) => (b.data + (b.criadoEm || 0)).localeCompare(a.data + (a.criadoEm || 0)));
     html += `<div class="card"><div class="toolbar"><h2 style="margin:0">Recargas e saldo informado</h2>${owner ? '<button class="primary" id="crAdd">+ Registrar</button>' : ""}</div>
       ${lst.length ? lst.map(r => `<div class="rep" style="grid-template-columns:90px 1fr auto"><div class="h">${esc(r.data.split("-").reverse().join("/"))}</div>
-        <div><span class="chip ${r.status === "saldo" ? "andamento" : "concluido"}">${r.status === "saldo" ? "Saldo informado" : "Recarga"}</span> <b>${r.status === "saldo" ? "" : "+"}${n(r.total)}</b> créditos${r.obs ? `<div class="meta">${esc(r.obs)}</div>` : ""}</div>
+        <div><span class="chip ${r.status === "saldo" ? "andamento" : "concluido"}">${r.status === "saldo" ? (r.dados === "agora" ? "Saldo do painel" : "Saldo no início do dia") : "Recarga"}</span> <b>${r.status === "saldo" ? "" : "+"}${n(r.total)}</b> créditos${r.obs ? `<div class="meta">${esc(r.obs)}</div>` : ""}</div>
         <div class="actions">${owner ? `<button data-crdel="${esc(r.id)}">✕</button>` : ""}</div></div>`).join("") : '<div class="empty">Nenhuma recarga registrada.</div>'}</div>`;
     return html;
   }

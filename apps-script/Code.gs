@@ -360,7 +360,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
   const dias = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
   const br = iso => iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "";
 
-  const consumo = { total: 0, vendas: 0, renovacoes: 0, linhasVendas: 0, linhasRenovacoes: 0, porBase: {}, porServidor: {} };
+  const consumo = { total: 0, vendas: 0, renovacoes: 0, linhasVendas: 0, linhasRenovacoes: 0, porBase: {}, porServidor: {}, porDia: {} };
   let consumoDesde = desde ? 0 : null;
   const erros = [], infoBases = [];
   const fimMes = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7), 0)).getUTCDate();
@@ -429,6 +429,8 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
       if (inRen) { consumo.renovacoes += cred; consumo.linhasRenovacoes++; det.renovacoes += cred; det.clientesRenovacoes++; }
       const chaveServ = servs.length ? servs.join(", ") : "Sem servidor";
       consumo.porServidor[chaveServ] = (consumo.porServidor[chaveServ] || 0) + cred * vezes;
+      if (inCad && dc) consumo.porDia[dc] = (consumo.porDia[dc] || 0) + cred;
+      if (inRen && dr) consumo.porDia[dr] = (consumo.porDia[dr] || 0) + cred;
 
       const base = { base: b.nome, id: v("ID"), linha: r + 2, cliente: v("Contato principal"), vendedor: v("Vendedor"), etapa: v("Etapa do lead"),
         origem: inCad && inRen ? "Venda e renovação" : inCad ? "Venda" : "Renovação", data: br(inRen ? dr : dc) };
