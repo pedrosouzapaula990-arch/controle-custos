@@ -42,19 +42,19 @@ const SupCore = (() => {
   // tarefas do dia = 2 conferências por disparo + tarefas fixas
   function tarefasDoDia(cfg) {
     const out = [];
-    disparos(cfg).forEach(d => {
+    disparos(cfg).forEach((d, i) => {
       const h = horaDe(d); if (h == null) return;
       const ini = Math.max(h, TURNOS[0].ini); // disparo antes do turno: confere no início do turno
-      out.push({ min: ini, hora: min2hm(ini), texto: txtIni(d) });
+      out.push({ min: ini, ord: ini + i * 0.01, hora: min2hm(ini), texto: txtIni(d) });
       const fim = FIM_ESPECIAL[d] != null ? FIM_ESPECIAL[d] : h + 180; // padrão: 3h depois; exceções abaixo
-      out.push({ min: fim, hora: min2hm(fim), texto: txtFim(d), fim: true });
+      out.push({ min: fim, ord: ini + i * 0.01 + 0.005, hora: min2hm(fim), texto: txtFim(d), fim: true }); // fim fica colado no início do mesmo disparo
     });
     tarefas(cfg).forEach(t => {
       const m = horaDe(t); if (m == null) return;
-      out.push({ min: m, hora: min2hm(m), texto: semHora(t) || t });
+      out.push({ min: m, ord: m, hora: min2hm(m), texto: semHora(t) || t });
     });
     out.forEach(t => { const tu = turnoDe(t.min) || (t.min < TURNOS[0].ini ? TURNOS[0] : TURNOS[1]); t.turno = tu.nome; t.tk = tu.chave; });
-    return out.sort((a, b) => a.min - b.min);
+    return out.sort((a, b) => a.ord - b.ord || a.min - b.min);
   }
   // id da tarefa marcada: dia + horário + texto (tarefas com o mesmo texto em turnos diferentes não se misturam)
   function ckId(dia, texto, hora) {
