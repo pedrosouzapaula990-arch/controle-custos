@@ -445,7 +445,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794840406"></script>
+<script src="suporte/sup-core.js?v=1794841821"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -931,7 +931,7 @@ $("supList").addEventListener("click",async e=>{
 
 // ---- navegação entre abas ----
 // ================== CALCULADORA ==================
-const CALC_PADRAO={c_cli:10000,c_tk:29.69,c_cr:4.20,c_mg:12,c_ad:1000,c_dias:30,c_cpa:30,c_rv:10,c_sup:15000,c_dsp:10000,c_imp:12};
+const CALC_PADRAO={c_cli:10000,c_tk:29.69,c_cr:4.20,c_mg:37,c_ad:1000,c_dias:30,c_cpa:30,c_rv:10,c_sup:15000,c_dsp:10000,c_imp:12};
 function calcLer(){let v={};try{v=JSON.parse(localStorage.getItem("calc_v1")||"{}")}catch(e){}return {...CALC_PADRAO,...v}}
 let calcExtras=[];
 function extrasLer(){try{const a=JSON.parse(localStorage.getItem("calc_extra_v1")||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
