@@ -449,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794843817"></script>
+<script src="suporte/sup-core.js?v=1794843826"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -749,7 +749,7 @@ async function load(){
   }catch(e){showBanner("Erro ao carregar os dados: "+e.message);$("status").textContent="";return false}
 }
 // ================== SUPORTE ==================
-const SUP_DEF={disparos:["07:00 – Vence hoje","10:15 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Turno manhã (9h–16:40)","Turno noite (16:40–23:30)"]};
+const SUP_DEF={disparos:["07:00 – Vence hoje","11:30 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Turno manhã (9h–16:40)","Turno noite (16:40–23:30)"]};
 const TURNOS=[{ini:9*60,fim:16*60+40,chave:"manh"},{ini:16*60+40,fim:23*60+30,chave:"noite"}];
 function minAgora(){const a=new Date();return a.getHours()*60+a.getMinutes()}
 function hm2min(h){const [a,b]=String(h).split(":").map(Number);return a*60+(b||0)}
