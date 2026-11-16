@@ -777,7 +777,7 @@ function importarKommo_(p) {
       return { ok: true };
     }
     if (fase === "fim") {
-      const agora = new Date(), conf = [], resumo = [];
+      const agora = new Date(), conf = [], resumo = [], diag = [];
       abas.forEach(aba => {
         const tmp = sb.getSheetByName("_tmp " + aba);
         const esperado = (p.contagens || {})[aba] || 0;
@@ -795,6 +795,12 @@ function importarKommo_(p) {
         resumo.push(aba + ": " + linhas.length + " leads");
         const vazias = COLS_BASE.concat(COLS_OPC).filter(c => { const ix = COLS_EXPORT.indexOf(c); return ix >= 0 && linhas.length > 50 && !linhas.some(r => String(r[ix] || "").trim() !== ""); });
         conf.push({ aba: aba, vazias: vazias, buscados: esperado, gravados: linhas.length, ok: true });
+        // diagnóstico: quantos leads têm cada coluna preenchida, e a linha gravada de um lead de teste
+        try {
+          const cont = COLS_EXPORT.map((c, i) => c + "=" + linhas.filter(r => String(r[i] || "").trim() !== "").length).filter((x, i) => ["Plano", "Telas", "Servidor", "Vendedor", "Data Cadastro", "Data de Vencimento", "Data Renovação"].indexOf(COLS_EXPORT[i]) >= 0);
+          const am = linhas.filter(r => r[0] === "110674836")[0];
+          diag.push(aba + " (" + linhas.length + "): " + cont.join(", ") + (am ? " | lead 110674836: " + ["Plano", "Telas", "Data Cadastro", "Data de Vencimento"].map(c => c + "=" + am[COLS_EXPORT.indexOf(c)]).join(", ") : ""));
+        } catch (e) {}
       });
       props.setProperty("KOMMO_VENDA_GANHA", JSON.stringify((p.vendaGanha || []).slice(0, 200)));
       const completa = conf.length === abas.length && conf.every(x => x.ok);
@@ -802,7 +808,7 @@ function importarKommo_(p) {
       const quando = Utilities.formatDate(agora, tz, "dd/MM HH:mm");
       if (completa) props.setProperty("KOMMO_ULTIMA", quando);
       props.setProperty("KOMMO_CONF", JSON.stringify({ quando: quando, completa: completa, colunasVazias: colVazias.join(" | "),
-        campos: (p.campos || []).join(", "),
+        campos: (p.campos || []).join(", "), diag: diag.join(" || "),
         detalhe: completa ? "" : conf.filter(x => !x.ok).map(x => x.aba + ": Kommo entregou " + x.buscados + ", gravados " + x.gravados).join(" | ") }));
       props.setProperty("KOMMO_ERRO", completa ? "" : "Extração incompleta; bases antigas mantidas.");
       props.deleteProperty("KOMMO_PUXANDO");
