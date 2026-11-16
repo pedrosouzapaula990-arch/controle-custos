@@ -36,6 +36,7 @@ const SupCore = (() => {
   const parseDados = r => { try { const d = JSON.parse(r.dados || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; } };
 
   // cada disparo tem 2 conferências: início (começou sem erro) e fim, 3h depois (100% da base)
+  const FIM_ESPECIAL = { "07:00": 12 * 60 + 30 }; // disparo das 07:00 (Vence hoje) termina às 12:30
   const txtIni = d => "Início do disparo " + d + " – começou sem erro";
   const txtFim = d => "Fim do disparo " + d + " – enviado a 100% da base";
   // tarefas do dia = 2 conferências por disparo + tarefas fixas
@@ -45,7 +46,7 @@ const SupCore = (() => {
       const h = horaDe(d); if (h == null) return;
       const ini = Math.max(h, TURNOS[0].ini); // disparo antes do turno: confere no início do turno
       out.push({ min: ini, hora: min2hm(ini), texto: txtIni(d) });
-      const fim = h + 180;
+      const fim = FIM_ESPECIAL[min2hm(h)] != null ? FIM_ESPECIAL[min2hm(h)] : h + 180; // padrão: 3h depois; exceções abaixo
       out.push({ min: fim, hora: min2hm(fim), texto: txtFim(d), fim: true });
     });
     tarefas(cfg).forEach(t => {
