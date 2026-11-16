@@ -375,7 +375,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
     if (!b.n || faltando.length) return;
     consumo.porBase[b.nome] = 0;
     consumo.detalheBase = consumo.detalheBase || {};
-    const det = consumo.detalheBase[b.nome] = { vendas: 0, renovacoes: 0, clientesVendas: 0, clientesRenovacoes: 0 };
+    const det = consumo.detalheBase[b.nome] = { vendas: 0, renovacoes: 0, clientesVendas: 0, clientesRenovacoes: 0, ativosN: 0, pesoAtivos: 0, telasAtivos: 0, mesesAtivos: 0 };
     for (let r = 0; r < b.n; r++) {
       const v = c => String((b.cols[c] || [])[r] || "").trim();
       if (/duplicad/i.test(v("Etapa do lead"))) continue;
@@ -398,7 +398,8 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
         const idA = v("ID");
         const ib = idsB[b.nome] = idsB[b.nome] || { a: [], v: [] };
         (dvA >= hoje ? ib.a : ib.v).push(idA);
-        if (dvA >= hoje) { ativ.agora++; ativ.porBase[b.nome] = (ativ.porBase[b.nome] || 0) + 1; ativosIds.push(idA);
+        if (dvA >= hoje) { det.ativosN++; det.pesoAtivos += cred; det.telasAtivos += (telasOk ? telasN : 1); det.mesesAtivos += (meses || 1);
+          ativ.agora++; ativ.porBase[b.nome] = (ativ.porBase[b.nome] || 0) + 1; ativosIds.push(idA);
           dB.agora++; if (dvA.slice(0, 7) === mesAtual && dvA > hoje) { ativ.venceRestoMes++; dB.venceRestoMes++; } }
         else { vencidosIds.push(idA); if (dvA.slice(0, 7) === mesAtual) { ativ.naoRenovaram++; dB.naoRenovaram++; } }
       }
