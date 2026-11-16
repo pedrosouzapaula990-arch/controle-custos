@@ -1,7 +1,7 @@
 // Regras compartilhadas do suporte (usado pelo site do suporte e pela aba Suporte do site de custos)
 const SupCore = (() => {
   const DEF = {
-    disparos: ["07:00 – Vence hoje", "10:15 – Vence amanhã", "11:30 – Venceu ontem", "17:40 – Vence hoje", "19:30 – Venceu ontem"],
+    disparos: ["07:00 – Vence hoje", "11:30 – Vence amanhã", "11:30 – Venceu ontem", "17:40 – Vence hoje", "19:30 – Venceu ontem"],
     resp: ["Diego", "Felipe", "Kaique", "Lígia"],
     tarefas: [
       "12:50 – Validação diária (base, vendas e indicações)",
@@ -28,7 +28,7 @@ const SupCore = (() => {
   const curto = n => String(n).split(/\s+[–-]\s+/)[0];
   const porHora = (a, b) => (horaDe(a) ?? 9999) - (horaDe(b) ?? 9999);
 
-  const disparos = cfg => [...(cfg?.disparos || DEF.disparos)].sort(porHora);
+  const disparos = cfg => [...(cfg?.disparos || DEF.disparos)].map(d => d === "10:15 – Vence amanhã" ? "11:30 – Vence amanhã" : d).sort(porHora);
   const RESP_ANTIGO = JSON.stringify(["Turno manhã (9h–16:40)", "Turno noite (16:40–23:30)"]);
   // lista padrão de responsáveis; quem ainda tem a lista antiga (só os turnos) passa a ver os nomes
   const resp = cfg => (cfg?.resp && JSON.stringify(cfg.resp) !== RESP_ANTIGO) ? cfg.resp : DEF.resp;
@@ -36,7 +36,7 @@ const SupCore = (() => {
   const parseDados = r => { try { const d = JSON.parse(r.dados || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; } };
 
   // cada disparo tem 2 conferências: início (começou sem erro) e fim, 3h depois (100% da base)
-  const FIM_ESPECIAL = { "07:00": 12 * 60 + 30 }; // disparo das 07:00 (Vence hoje) termina às 12:30
+  const FIM_ESPECIAL = { "07:00 – Vence hoje": 12 * 60 + 30, "11:30 – Vence amanhã": 16 * 60 }; // fins que não são +3h
   const txtIni = d => "Início do disparo " + d + " – começou sem erro";
   const txtFim = d => "Fim do disparo " + d + " – enviado a 100% da base";
   // tarefas do dia = 2 conferências por disparo + tarefas fixas
@@ -46,7 +46,7 @@ const SupCore = (() => {
       const h = horaDe(d); if (h == null) return;
       const ini = Math.max(h, TURNOS[0].ini); // disparo antes do turno: confere no início do turno
       out.push({ min: ini, hora: min2hm(ini), texto: txtIni(d) });
-      const fim = FIM_ESPECIAL[min2hm(h)] != null ? FIM_ESPECIAL[min2hm(h)] : h + 180; // padrão: 3h depois; exceções abaixo
+      const fim = FIM_ESPECIAL[d] != null ? FIM_ESPECIAL[d] : h + 180; // padrão: 3h depois; exceções abaixo
       out.push({ min: fim, hora: min2hm(fim), texto: txtFim(d), fim: true });
     });
     tarefas(cfg).forEach(t => {
