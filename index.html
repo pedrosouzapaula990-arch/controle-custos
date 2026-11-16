@@ -206,11 +206,13 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   <div id="pgCalc" hidden>
     <header>
       <div>
-        <h1>Calculadora de faturamento</h1>
+        <h1>Calculadora</h1>
         <div class="sub">Simulação mensal: mude os números e o resultado atualiza na hora</div>
       </div>
       <div><button id="cReset">Restaurar padrão</button></div>
     </header>
+    <div class="subtabs"><button data-csub="fat" class="on">Calculadora de faturamento</button><button data-csub="meta">Calculadora de meta de clientes</button></div>
+    <div id="cSubFat">
     <div class="kpis">
       <div class="card kpi"><div class="lbl">Faturamento</div><div class="val" id="kcFat">—</div><div class="note" id="kcFatN"></div></div>
       <div class="card kpi"><div class="lbl">Custos totais</div><div class="val" id="kcCus">—</div><div class="note" id="kcCusN"></div></div>
@@ -258,6 +260,8 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
         <table class="dtab ctab" id="cTab"></table>
       </div>
     </div>
+    </div>
+    <div id="cSubMeta" hidden></div>
   </div>
 
   <div id="pgDash" hidden>
@@ -266,7 +270,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
     <div class="banner" id="dashBanner"></div>
     <div class="subtabs">
       <button data-dsub="resumo" class="on">Resumão</button><button data-dsub="credito">Crédito</button><button data-dsub="vendas">Vendas</button>
-      <button data-dsub="trafego">Tráfego pago</button><button data-dsub="ativos">Clientes ativos</button><button data-dsub="meta">Meta de clientes</button>
+      <button data-dsub="trafego">Tráfego pago</button><button data-dsub="ativos">Clientes ativos</button>
     </div>
     <div id="dashBox"><div class="empty">Carregando…</div></div>
   </div>
@@ -445,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1794842424"></script>
+<script src="suporte/sup-core.js?v=1794842572"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -883,7 +887,7 @@ async function loadVal(forcar,tent){
   catch(e){
     if(tent<4&&!/Atualize/.test(e.message)){retry=true;showSupBanner("Lendo as bases (são muitas linhas, pode levar até 1 minuto)…")}
     else showSupBanner("Erro ao calcular a validação: "+e.message)}
-  finally{valCarregando=false;if(retry)setTimeout(()=>loadVal(false,tent+1),8000);else{$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular"}renderSup()}
+  finally{valCarregando=false;if(retry)setTimeout(()=>loadVal(false,tent+1),8000);else{$("vAtual").disabled=false;$("vAtual").textContent="↻ Recalcular"}renderSup();if(pagina==="calc"&&calcSub==="meta")renderCalcSub()}
 }
 function renderValid(){
   $("vBases").innerHTML=SupCore.htmlBasesInfo(valRes);if(!valRes)return;
@@ -976,13 +980,22 @@ $("cExtras").addEventListener("click",e=>{const b=e.target.closest("[data-cdel]"
 calcExtras=extrasLer();extrasDesenhar();
 calcPreencher(calcLer());calcRender();
 
+let calcSub="fat";
+function renderCalcSub(){
+  $("cSubFat").hidden=calcSub!=="fat";$("cSubMeta").hidden=calcSub!=="meta";$("cReset").hidden=calcSub!=="fat";
+  document.querySelectorAll("[data-csub]").forEach(b=>b.classList.toggle("on",b.dataset.csub===calcSub));
+  if(calcSub!=="meta")return;
+  const m0=metaLer();
+  $("cSubMeta").innerHTML=SupCore.htmlDashboard("meta",{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:m0,custos:[]});
+  if($("mtAlvo")){const upd=()=>{const m={alvo:+$("mtAlvo").value||0,mes:$("mtMes").value};try{localStorage.setItem("meta_v1",JSON.stringify(m))}catch(e){}$("metaOut").innerHTML=SupCore.htmlMeta(valRes,m)};$("mtAlvo").oninput=upd;$("mtMes").oninput=upd}
+}
+document.querySelectorAll("[data-csub]").forEach(b=>b.onclick=()=>{calcSub=b.dataset.csub;renderCalcSub();if(calcSub==="meta"&&!valRes)loadSup().then(()=>loadVal(false))});
 let dashSub="resumo";
 function metaLer(){try{const m=JSON.parse(localStorage.getItem("meta_v1")||"null");if(m&&m.alvo&&m.mes)return m}catch(e){}const d=new Date();d.setMonth(d.getMonth()+2);return {alvo:10000,mes:ym(d)}}
 function renderDash(){
   document.querySelectorAll("[data-dsub]").forEach(b=>b.classList.toggle("on",b.dataset.dsub===dashSub));
   const key=ym(new Date());
   $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:metaLer(),custos:items.filter(i=>(i.data||"").startsWith(key))});
-  if(dashSub==="meta"&&$("mtAlvo")){const upd=()=>{const m={alvo:+$("mtAlvo").value||0,mes:$("mtMes").value};try{localStorage.setItem("meta_v1",JSON.stringify(m))}catch(e){}$("metaOut").innerHTML=SupCore.htmlMeta(valRes,m)};$("mtAlvo").oninput=upd;$("mtMes").oninput=upd}
 }
 document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
 $("dashAtual").onclick=()=>{load();loadSup().then(()=>loadVal(true))};
@@ -991,6 +1004,7 @@ function rota(){
   $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";$("pgDash").hidden=pagina!=="dash";
   $("tabDash").classList.toggle("on",pagina==="dash");document.body.classList.toggle("pg-dash",pagina==="dash");
   if(pagina==="dash"){renderDash();load();loadSup().then(()=>{if(!valRes)loadVal(false)})}
+  if(pagina==="calc"&&calcSub==="meta"){renderCalcSub();if(!valRes)loadSup().then(()=>loadVal(false))}
   $("tabCustos").classList.toggle("on",pagina==="custos");$("tabSuporte").classList.toggle("on",pagina==="suporte");$("tabCalc").classList.toggle("on",pagina==="calc");
   document.body.classList.toggle("pg-suporte",pagina==="suporte");document.body.classList.toggle("pg-calc",pagina==="calc");
   if(pagina==="suporte"){renderSup();loadSup()}
