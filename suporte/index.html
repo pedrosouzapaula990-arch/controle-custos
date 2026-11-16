@@ -99,6 +99,18 @@ a.clip{color:var(--accent);text-decoration:none;font-size:12px;font-weight:600;m
 .tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--line)}
 .tabs a{padding:10px 14px;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs a.on{color:var(--ink);border-color:var(--accent)}
+.esc-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.esc-nav b{font-size:16px;min-width:130px;text-align:center;text-transform:capitalize}
+.esc-scroll{overflow-x:auto}.esc-grid{display:grid;grid-template-columns:repeat(7,minmax(118px,1fr));gap:6px;min-width:840px}
+.esc-h{font-size:11px;color:var(--muted);text-align:center;font-weight:600;padding:2px}
+.esc-d{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:92px;padding:5px;display:flex;flex-direction:column;gap:4px}
+.esc-d.fora{opacity:.35}.esc-d.hoje{border-color:var(--accent)}.esc-d.alvo{outline:2px dashed var(--accent)}
+.esc-n{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}.esc-n button{border:none;background:none;padding:0 4px;font-size:15px;cursor:pointer;color:var(--accent)}
+.esc-i{font-size:11px;border-radius:7px;padding:3px 6px;cursor:grab;line-height:1.25;border:1px solid transparent}
+.esc-i.m{background:var(--accent-soft);color:var(--accent)}.esc-i.t{background:#e6effc;color:#1d4ed8}.esc-i.f{background:var(--red-soft);color:var(--red)}
+@media (prefers-color-scheme:dark){.esc-i.t{background:#172554;color:#93c5fd}}
+.esc-i span{display:block;opacity:.85}
+#supAdd,#supFab{display:none!important}
+body.esc-on .dnav{display:none}
 .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
 .subtabs button{border-radius:999px;font-size:13px;padding:6px 12px}
 .subtabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -152,7 +164,7 @@ button.ckbtn{cursor:pointer}
   <header>
     <div>
       <h1>Suporte</h1>
-      <div class="sub">Rotina do dia: checklist e reporte hora a hora</div>
+      <div class="sub">Rotina do dia, validação, crédito e escala</div>
     </div>
     <div class="monthnav dnav">
       <button class="icon" id="dPrev" aria-label="Dia anterior">‹</button>
@@ -164,9 +176,9 @@ button.ckbtn{cursor:pointer}
   <div class="banner" id="supBanner"></div>
   <div class="subtabs">
     <button data-sub="check" class="on">Checklist do dia</button>
-    <button data-sub="hora">Hora a hora</button>
     <button data-sub="valid">Validação</button>
     <button data-sub="cred">Crédito e ativos</button>
+    <button data-sub="escala">Escala</button>
   </div>
 
   <div id="subCheck">
@@ -201,7 +213,9 @@ button.ckbtn{cursor:pointer}
 
   <div id="subCred" hidden><div id="crBox"><div class="empty">Carregando…</div></div></div>
 
-  <div id="subHora" hidden>
+  <div id="subEscala" hidden><div id="escBox"></div></div>
+
+  <div id="subHora" hidden style="display:none">
     <div class="kpis">
       <div class="card kpi"><div class="lbl">Último reporte</div><div class="val" id="sUlt">—</div><div class="note" id="sUltN"></div></div>
       <div class="card kpi"><div class="lbl">Disparos enviados</div><div class="val" id="sEnv">—</div><div class="note">até o último reporte</div></div>
@@ -240,6 +254,25 @@ button.ckbtn{cursor:pointer}
       <button type="button" id="rSaveCopy">Salvar e copiar</button>
       <button type="submit" class="primary" id="rSave">Salvar</button>
     </div>
+  </form>
+</div>
+
+<div class="overlay" id="ovEsc">
+  <form class="modal" id="formEsc">
+    <h3 id="escTit">Escala</h3>
+    <div class="field"><label for="escPes">Pessoa</label><select id="escPes"></select></div>
+    <div class="grid2" style="margin:0"><div class="field"><label for="escE">Entrada</label><input id="escE" type="time"></div><div class="field"><label for="escS">Saída</label><input id="escS" type="time"></div></div>
+    <div class="field"><label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)"><input type="checkbox" id="escF"> Folga (sem horário)</label></div>
+    <div class="field"><label for="escObs">Observação (folga, troca…)</label><input id="escObs" placeholder="Opcional"></div>
+    <div class="mfoot"><button type="button" id="escDel">Remover</button><button type="button" id="escCancel">Cancelar</button><button type="submit" class="primary">Salvar</button></div>
+  </form>
+</div>
+<div class="overlay" id="ovPes">
+  <form class="modal" id="formPes">
+    <h3>Pessoas da escala</h3>
+    <div id="pesLista"></div>
+    <div class="grid2" style="margin:8px 0 0"><div class="field"><label for="pesNome">Nova pessoa</label><input id="pesNome" placeholder="Nome"></div><div class="field"><label>&nbsp;</label><button type="button" id="pesAdd">+ Adicionar</button></div></div>
+    <div class="mfoot"><button type="button" class="primary" id="pesOk">Fechar</button></div>
   </form>
 </div>
 
@@ -291,7 +324,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1794843925"></script>
+<script src="sup-core.js?v=1794844330"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -308,6 +341,7 @@ async function loadSup(){
     checks=all.filter(i=>i.tipo==="check").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
     marks=all.filter(i=>i.tipo==="valid").map(i=>({...i,data:normData(i.data),hora:String(i.hora||"").slice(0,5)}));
     recargas=all.filter(i=>i.tipo==="recarga").map(i=>({...i,data:normData(i.data)}));
+    all.filter(i=>i.tipo==="escala").forEach(i=>{try{escalas[String(i.id).slice(4)]=JSON.parse(i.dados)}catch(e){}});
     supCarregado=true;
     $("supStatus").textContent="Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     showSupBanner("");render();
@@ -339,13 +373,12 @@ function renderValid(){
 }
 function render(){
   $("sDate").value=supDia;
-  $("subValid").hidden=sub!=="valid";$("subCred").hidden=sub!=="cred";
+  $("subValid").hidden=sub!=="valid";$("subCred").hidden=sub!=="cred";$("subEscala").hidden=sub!=="escala";document.body.classList.toggle("esc-on",sub==="escala");if(sub==="escala")renderEscala();
   if(sub==="valid")renderValid();
   if(sub==="cred")$("crBox").innerHTML=SupCore.htmlCredito(valRes,recargas,false);
-  $("subCheck").hidden=sub!=="check";$("subHora").hidden=sub!=="hora";
+  $("subCheck").hidden=sub!=="check";
   document.querySelectorAll("[data-sub]").forEach(b=>b.classList.toggle("on",b.dataset.sub===sub));
   if(sub==="check")$("ckTurnos").innerHTML=SupCore.htmlChecklist(supCfg,checks,supDia,true);
-  else if(sub==="hora")SupCore.renderHora($,supCfg,supItems,supDia,{confirm:supConfirm,acoes:true,checks});
 }
 
 // ============ checklist ============
@@ -469,9 +502,80 @@ $("vtDel").onclick=async()=>{if(!vtAtual?.marca&&!vtGrupo.some(x=>x.marca))retur
 $("vtCancel").onclick=()=>$("ovVal").classList.remove("open");
 $("ovVal").addEventListener("click",e=>{if(e.target===$("ovVal"))$("ovVal").classList.remove("open")});
 
+
+// ============ escala (calendário do mês) ============
+const ESC_PESSOAS=["Diego","Felipe","Kaique","Lígia","Eric","João","Rafael"],ESC_DS=["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+let escalas={},escMes=ym(new Date()),escSel=null,escDrag=null;
+function escDoc(m){if(escalas[m])return escalas[m];const ant=Object.keys(escalas).sort().filter(k=>k<m).pop();
+  return {pessoas:ant?escalas[ant].pessoas.map(x=>({...x})):ESC_PESSOAS.map(n=>({nome:n,e:"09:00",s:"16:40"})),dias:{}}}
+async function escSalvar(m){const d=escalas[m];await api("save",{item:{id:"esc-"+m,tipo:"escala",data:m+"-01",hora:"",responsavel:"",fila:0,total:0,status:"",dados:JSON.stringify(d),obs:"(escala do mês - não apagar)",criadoEm:Date.now()}})}
+async function escGravar(){try{await escSalvar(escMes);showSupBanner("")}catch(e){showSupBanner("Erro ao salvar a escala: "+e.message)}renderEscala()}
+function escTurno(e){const h=+String(e||"0").slice(0,2)*60+ +String(e||"0").slice(3,5);return h>=16*60+40?"t":"m"}
+function renderEscala(){
+  const d=escDoc(escMes);escalas[escMes]=d;
+  const [y,mo]=escMes.split("-").map(Number),nome=new Date(y,mo-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  const ini=new Date(y,mo-1,1),off=(ini.getDay()+6)%7,tot=new Date(y,mo,0).getDate(),semanas=Math.ceil((off+tot)/7),hj=hoje();
+  let h=`<div class="esc-nav"><button id="escPrev">‹</button><b>${nome}</b><button id="escNext">›</button><button id="escPessoas">Pessoas</button><span class="hint">Clique no + para adicionar, no nome para editar, ou arraste para outro dia.</span></div><div class="esc-scroll"><div class="esc-grid">`;
+  ESC_DS.forEach(x=>h+=`<div class="esc-h">${x}</div>`);
+  for(let c=0;c<semanas*7;c++){
+    const n=c-off+1,ok=n>=1&&n<=tot,ds=ok?escMes+"-"+String(n).padStart(2,"0"):"";
+    if(!ok){h+=`<div class="esc-d fora"></div>`;continue}
+    const lst=(d.dias[ds]||[]).map((x,i)=>({x,i})).sort((a,b)=>String(a.x.e).localeCompare(String(b.x.e)));
+    h+=`<div class="esc-d${ds===hj?" hoje":""}" data-dia="${ds}"><div class="esc-n"><span>${n}</span><button data-add="${ds}" title="Adicionar">+</button></div>`+
+      lst.map(({x,i})=>`<div class="esc-i ${x.f?"f":escTurno(x.e)}" draggable="true" data-dia="${ds}" data-i="${i}">${esc(x.n)}<span>${x.f?"Folga":esc(x.e)+"–"+esc(x.s)}${x.o?" · "+esc(x.o):""}</span></div>`).join("")+`</div>`;
+    if(c%7===6&&c<semanas*7-1&&false){}
+  }
+  h+=`</div></div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="escRep">↻ Repetir uma semana no mês</button><span class="hint">Copia a semana escolhida (por dia da semana) para as semanas seguintes do mês.</span></div>`;
+  $("escBox").innerHTML=h;
+  $("escPrev").onclick=()=>{const x=new Date(y,mo-2,1);escMes=ym(x);renderEscala();escCarregarMes()};
+  $("escNext").onclick=()=>{const x=new Date(y,mo,1);escMes=ym(x);renderEscala();escCarregarMes()};
+  $("escPessoas").onclick=abrirPessoas;$("escRep").onclick=repetirSemana;
+  $("escBox").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>abrirEsc(b.dataset.add,null));
+  $("escBox").querySelectorAll(".esc-i").forEach(el=>{
+    el.onclick=()=>abrirEsc(el.dataset.dia,+el.dataset.i);
+    el.ondragstart=e=>{escDrag={dia:el.dataset.dia,i:+el.dataset.i};e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain","x")}catch(_){}};
+  });
+  $("escBox").querySelectorAll(".esc-d[data-dia]").forEach(el=>{
+    el.ondragover=e=>{if(escDrag){e.preventDefault();el.classList.add("alvo")}};el.ondragleave=()=>el.classList.remove("alvo");
+    el.ondrop=e=>{e.preventDefault();el.classList.remove("alvo");if(!escDrag)return;const dd=escDoc(escMes),a=dd.dias[escDrag.dia]||[],it=a[escDrag.i];const alvo=el.dataset.dia;
+      if(it&&alvo!==escDrag.dia){a.splice(escDrag.i,1);dd.dias[escDrag.dia]=a;(dd.dias[alvo]=dd.dias[alvo]||[]).push(it);escDrag=null;escGravar()}else escDrag=null};
+  });
+}
+function escCarregarMes(){if(!escalas[escMes]&&supCarregado)loadSup()}
+function abrirEsc(dia,i){
+  const d=escDoc(escMes);escSel={dia,i};const it=i!=null?(d.dias[dia]||[])[i]:null;
+  const [yy,mm,dd]=dia.split("-");$("escTit").textContent=(it?"Editar":"Adicionar")+" · "+dd+"/"+mm+" ("+ESC_DS[(new Date(+yy,+mm-1,+dd).getDay()+6)%7]+")";
+  $("escPes").innerHTML=d.pessoas.map(p=>`<option>${esc(p.nome)}</option>`).join("");
+  const pes=it?it.n:d.pessoas[0]?.nome;
+  $("escPes").value=pes;$("escF").checked=!!(it&&it.f);
+  const base=d.pessoas.find(p=>p.nome===pes)||{e:"09:00",s:"16:40"};
+  $("escE").value=it?it.e||"":base.e;$("escS").value=it?it.s||"":base.s;$("escObs").value=it?it.o||"":"";
+  $("escDel").style.display=it?"":"none";$("ovEsc").classList.add("open");
+}
+$("escPes").onchange=()=>{const p=escDoc(escMes).pessoas.find(x=>x.nome===$("escPes").value);if(p){$("escE").value=p.e;$("escS").value=p.s}};
+$("escCancel").onclick=()=>$("ovEsc").classList.remove("open");
+$("ovEsc").addEventListener("click",e=>{if(e.target===$("ovEsc"))$("ovEsc").classList.remove("open")});
+$("formEsc").onsubmit=e=>{e.preventDefault();const d=escDoc(escMes),{dia,i}=escSel,f=$("escF").checked;
+  const it={n:$("escPes").value,e:f?"":$("escE").value,s:f?"":$("escS").value,o:$("escObs").value.trim()};if(f)it.f=1
+  d.dias[dia]=d.dias[dia]||[];if(i!=null)d.dias[dia][i]=it;else d.dias[dia].push(it);$("ovEsc").classList.remove("open");escalas[escMes]=d;escGravar()};
+$("escDel").onclick=()=>{const d=escDoc(escMes),{dia,i}=escSel;(d.dias[dia]||[]).splice(i,1);$("ovEsc").classList.remove("open");escGravar()};
+function abrirPessoas(){const d=escDoc(escMes);
+  $("pesLista").innerHTML=d.pessoas.map((p,i)=>`<div class="grid2" style="margin:0 0 6px;align-items:end"><div class="field" style="margin:0"><label>${esc(p.nome)} · padrão</label><div style="display:flex;gap:6px"><input type="time" data-pe="${i}" value="${esc(p.e)}"><input type="time" data-ps="${i}" value="${esc(p.s)}"></div></div><button type="button" data-prm="${i}">Remover</button></div>`).join("");
+  $("ovPes").classList.add("open")}
+$("pesLista").addEventListener("input",e=>{const d=escDoc(escMes),i=e.target.dataset.pe??e.target.dataset.ps;if(i==null)return;if(e.target.dataset.pe!=null)d.pessoas[i].e=e.target.value;else d.pessoas[i].s=e.target.value});
+$("pesLista").addEventListener("click",e=>{const b=e.target.closest("[data-prm]");if(!b)return;escDoc(escMes).pessoas.splice(+b.dataset.prm,1);abrirPessoas()});
+$("pesAdd").onclick=()=>{const n=$("pesNome").value.trim();if(!n)return;const d=escDoc(escMes);escalas[escMes]=d;if(!d.pessoas.some(p=>p.nome.toLowerCase()===n.toLowerCase()))d.pessoas.push({nome:n,e:"09:00",s:"16:40"});$("pesNome").value="";abrirPessoas()};
+$("pesOk").onclick=()=>{$("ovPes").classList.remove("open");escGravar()};
+$("formPes").onsubmit=e=>e.preventDefault();
+function repetirSemana(){const d=escDoc(escMes),[y,mo]=escMes.split("-").map(Number),tot=new Date(y,mo,0).getDate(),off=(new Date(y,mo-1,1).getDay()+6)%7,sem=Math.ceil((off+tot)/7);
+  const r=prompt("Repetir qual semana do mês? (1 a "+sem+"). Ela será copiada para as semanas seguintes, substituindo o que já existe nelas.","1");if(!r)return;const w=+r;if(!(w>=1&&w<=sem))return;
+  const dia=(w0,k)=>{const n=w0*7+k-off+1;return n>=1&&n<=tot?escMes+"-"+String(n).padStart(2,"0"):null};
+  for(let s2=w;s2<sem;s2++)for(let k=0;k<7;k++){const o=dia(w-1,k),t=dia(s2,k);if(!t)continue;d.dias[t]=o?JSON.parse(JSON.stringify(d.dias[o]||[])):[]}
+  escalas[escMes]=d;escGravar()}
+
 // ============ navegação ============
 document.querySelectorAll("[data-sub]").forEach(b=>b.onclick=()=>{sub=b.dataset.sub;location.hash=sub==="check"?"":sub;render();if((sub==="valid"||sub==="cred")&&!valRes)loadVal(false)});
-if(["#hora","#valid","#cred"].includes(location.hash))sub=location.hash.slice(1);
+if(["#valid","#cred","#escala"].includes(location.hash))sub=location.hash.slice(1);
 $("sDate").onchange=()=>{if($("sDate").value){supDia=$("sDate").value;supConfirm=null;render()}};
 function mudaDia(n){const [y,m,d]=supDia.split("-").map(Number);const x=new Date(y,m-1,d+n);supDia=ym(x)+"-"+String(x.getDate()).padStart(2,"0");supConfirm=null;render()}
 $("dPrev").onclick=()=>mudaDia(-1);$("dNext").onclick=()=>mudaDia(1);
