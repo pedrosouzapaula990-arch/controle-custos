@@ -7,7 +7,7 @@ const FUNIS = { DarbplayOficial: "Base Darb Oficial", Suporte: "Base Motiva" };
 const COLS = ["ID", "Contato principal", "Etapa do lead", "Funil de vendas", "Lead usuário responsável",
   "Data Criada", "Última modificação", "Modificado por", "Data Cadastro", "Plano", "Telas", "Servidor",
   "Aplicativo Instalado", "Vendedor", "Data de Vencimento", "Última Data Vencimento", "Data Renovação",
-  "Renovação", "Fila de Renovação", "Tabulação", "Venda"];
+  "Renovação", "Fila de Renovação", "Tabulação", "Venda", "Usuário", "Telefone"];
 const TZ = "America/Sao_Paulo";
 const dorme = ms => new Promise(r => setTimeout(r, ms));
 const norm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -120,18 +120,23 @@ export default async () => {
 
     // nomes dos contatos
     const ids = [...new Set(Object.values(linhasPorAba).flat().map(r => r.contato).filter(Boolean))];
-    const nomes = {};
+    const nomes = {}, fones = {};
     for (let i = 0; i < ids.length; i += 80) {
       if (i % 800 === 0) await apps({ fase: "andamento", texto: `Nomes dos contatos ${i}/${ids.length}…` });
       const j = await kommo("contacts?limit=250&" + ids.slice(i, i + 80).map(id => "filter[id][]=" + id).join("&"));
-      ((j && j._embedded && j._embedded.contacts) || []).forEach(c => (nomes[c.id] = c.name));
+      ((j && j._embedded && j._embedded.contacts) || []).forEach(c => {
+        nomes[c.id] = c.name;
+        const tel = [];
+        (c.custom_fields_values || []).forEach(f => { if (f.field_code === "PHONE" || /telefone|celular|fone/i.test(String(f.field_name || ""))) (f.values || []).forEach(v => { if (v && v.value) tel.push(String(v.value).trim()); }); });
+        fones[c.id] = [...new Set(tel)].join(" / ");
+      });
       await dorme(220);
     }
-    const iNome = COLS.indexOf("Contato principal");
+    const iNome = COLS.indexOf("Contato principal"), iTel = COLS.indexOf("Telefone");
 
     // envio em partes
     for (const [aba, rows] of Object.entries(linhasPorAba)) {
-      const linhas = rows.map(r => { const x = r.linha.slice(); x[iNome] = (r.contato && nomes[r.contato]) || ""; return x; });
+      const linhas = rows.map(r => { const x = r.linha.slice(); x[iNome] = (r.contato && nomes[r.contato]) || ""; x[iTel] = (r.contato && fones[r.contato]) || ""; return x; });
       for (let i = 0; i < linhas.length; i += 800) {
         await apps({ fase: "parte", aba, linhas: linhas.slice(i, i + 800), texto: `Enviando ${aba} ${Math.min(i + 800, linhas.length)}/${linhas.length}…` });
       }

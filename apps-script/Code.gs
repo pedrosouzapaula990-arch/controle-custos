@@ -480,7 +480,7 @@ const KOMMO_FUNIS = { "DarbplayOficial": "Base Darb Oficial", "Suporte": "Base M
 const COLS_EXPORT = ["ID", "Contato principal", "Etapa do lead", "Funil de vendas", "Lead usuário responsável",
   "Data Criada", "Última modificação", "Modificado por", "Data Cadastro", "Plano", "Telas", "Servidor",
   "Aplicativo Instalado", "Vendedor", "Data de Vencimento", "Última Data Vencimento", "Data Renovação",
-  "Renovação", "Fila de Renovação", "Tabulação", "Venda"];
+  "Renovação", "Fila de Renovação", "Tabulação", "Venda", "Usuário", "Telefone"];
 const PASTA_FOTOS = "Fotos das bases (Kommo)";
 
 function kommoCfg_() {
