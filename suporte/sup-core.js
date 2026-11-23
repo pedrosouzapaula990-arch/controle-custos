@@ -2,7 +2,7 @@
 const SupCore = (() => {
   const DEF = {
     disparos: ["07:00 – Vence hoje", "11:30 – Vence amanhã", "11:30 – Venceu ontem", "17:40 – Vence hoje", "19:30 – Venceu ontem"],
-    resp: ["Diego", "Felipe", "Kaique", "Lígia"],
+    resp: ["Diego", "Felipe", "Kaique", "Lígia", "Paula"],
     tarefas: [
       "12:50 – Validação diária (base, vendas e indicações)",
       "13:30 – Acompanhar solicitações de conteúdo",
@@ -31,7 +31,7 @@ const SupCore = (() => {
   const disparos = cfg => [...(cfg?.disparos || DEF.disparos)].map(d => d === "10:15 – Vence amanhã" ? "11:30 – Vence amanhã" : d).sort(porHora);
   const RESP_ANTIGO = JSON.stringify(["Turno manhã (9h–16:40)", "Turno noite (16:40–23:30)"]);
   // lista padrão de responsáveis; quem ainda tem a lista antiga (só os turnos) passa a ver os nomes
-  const resp = cfg => (cfg?.resp && JSON.stringify(cfg.resp) !== RESP_ANTIGO) ? cfg.resp : DEF.resp;
+  const resp = cfg => { const l = (cfg?.resp && JSON.stringify(cfg.resp) !== RESP_ANTIGO) ? [...cfg.resp] : [...DEF.resp]; if (!l.some(x => String(x).toLowerCase() === "paula")) l.push("Paula"); return l; };
   const tarefas = cfg => [...(cfg?.tarefas || DEF.tarefas)].sort(porHora);
   const parseDados = r => { try { const d = JSON.parse(r.dados || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; } };
 
