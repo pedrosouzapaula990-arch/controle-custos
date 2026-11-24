@@ -315,8 +315,8 @@ button.ckbtn{cursor:pointer}
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML}
 function ym(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
-function hoje(){const t=new Date();return ym(t)+"-"+String(t.getDate()).padStart(2,"0")}
-function agoraHM(){const a=new Date();return String(a.getHours()).padStart(2,"0")+":"+String(a.getMinutes()).padStart(2,"0")}
+const spParts=()=>{const o={};new Intl.DateTimeFormat("en-GB",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).forEach(p=>o[p.type]=p.value);return o};function hoje(){const o=spParts();return o.year+"-"+o.month+"-"+o.day}
+function agoraHM(){const o=spParts();return o.hour+":"+o.minute}
 function normData(d){d=String(d||"");if(!d||/^\d{4}-\d{2}(-\d{2})?$/.test(d))return d;const x=new Date(d);if(isNaN(x))return d;return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")}
 async function api(action,payload){
   const r=await fetch("/api",{method:"POST",body:JSON.stringify({action,aba:"Suporte",...(payload||{})})});
@@ -324,7 +324,7 @@ async function api(action,payload){
   if(!j.ok)throw new Error(j.error||"Resposta inválida.");return j;
 }
 </script>
-<script src="sup-core.js?v=1795440521"></script>
+<script src="sup-core.js?v=1795544727"></script>
 <script>
 // ============ estado ============
 let supItems=[],checks=[],marks=[],recargas=[],valRes=null,valCarregando=false,supCfg=null,supEditId=null,supConfirm=null,sub="check";
@@ -423,7 +423,7 @@ function abrirSup(item){
   supEditId=item?.id||null;
   $("supTitle").textContent=item?"Editar reporte":"Novo reporte";
   $("rData").value=item?.data||supDia;
-  $("rHora").value=item?.hora||(String(new Date().getHours()).padStart(2,"0")+":00");
+  $("rHora").value=item?.hora||(spParts().hour+":00");
   const anterior=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)).pop();
   const resps=SupCore.resp(supCfg);
   let sug=item?.responsavel||"";

@@ -18,8 +18,10 @@ const SupCore = (() => {
 
   const esc = s => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
   const pad = n => String(n).padStart(2, "0");
-  const hojeStr = () => { const t = new Date(); return t.getFullYear() + "-" + pad(t.getMonth() + 1) + "-" + pad(t.getDate()); };
-  const minAgora = () => { const a = new Date(); return a.getHours() * 60 + a.getMinutes(); };
+  // "hoje" e "agora" sempre no horário de Brasília, mesmo se o aparelho estiver em outro fuso ou com a data errada
+  const spParts = () => { const o = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date()).forEach(p => o[p.type] = p.value); return o; };
+  const hojeStr = () => { const o = spParts(); return o.year + "-" + o.month + "-" + o.day; };
+  const minAgora = () => { const o = spParts(); return +o.hour * 60 + +o.minute; };
   const hm2min = h => { const [a, b] = String(h).split(":").map(Number); return a * 60 + (b || 0); };
   const min2hm = m => pad(Math.floor(m / 60)) + ":" + pad(m % 60);
   const turnoDe = m => TURNOS.find(t => m >= t.ini && m < t.fim) || null;

@@ -449,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1795440521"></script>
+<script src="suporte/sup-core.js?v=1795544727"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -500,7 +500,7 @@ function ym(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")
 function mLabel(d,short){return d.toLocaleDateString("pt-BR",short?{month:"short"}:{month:"long",year:"numeric"}).replace(".","")}
 function parseVal(s){s=String(s).trim().replace(/[R$\s]/g,"");if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");const n=parseFloat(s);return isFinite(n)?Math.round(n*100)/100:NaN}
 const precisaMes=c=>/pagamento|^rv\b|remunera|sal[aá]rio|comiss/i.test(c||"")&&!/taxas? de pagamento/i.test(c||"");
-function hoje(){const t=new Date();return ym(t)+"-"+String(t.getDate()).padStart(2,"0")}
+const spParts=()=>{const o={};new Intl.DateTimeFormat("en-GB",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).forEach(p=>o[p.type]=p.value);return o};function hoje(){const o=spParts();return o.year+"-"+o.month+"-"+o.day}
 function mesLabel(m){if(!/^\d{4}-\d{2}$/.test(m||""))return m||"";const [y,mm]=m.split("-");return new Date(+y,+mm-1,1).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","").replace(" de ","/")}
 function updMes(){const c=readPick("sCat","nCat");$("fMes").style.display=precisaMes(c)?"flex":"none"}
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML}
@@ -751,7 +751,7 @@ async function load(){
 // ================== SUPORTE ==================
 const SUP_DEF={disparos:["07:00 – Vence hoje","11:30 – Vence amanhã","11:30 – Venceu ontem","17:40 – Vence hoje","19:30 – Venceu ontem"],resp:["Turno manhã (9h–16:40)","Turno noite (16:40–23:30)"]};
 const TURNOS=[{ini:9*60,fim:16*60+40,chave:"manh"},{ini:16*60+40,fim:23*60+30,chave:"noite"}];
-function minAgora(){const a=new Date();return a.getHours()*60+a.getMinutes()}
+function minAgora(){const o=spParts();return +o.hour*60+ +o.minute}
 function hm2min(h){const [a,b]=String(h).split(":").map(Number);return a*60+(b||0)}
 function turnoDe(min){return TURNOS.find(t=>min>=t.ini&&min<t.fim)||null}
 // alerta de reporte: dentro do turno, mais de 1h (+10 min de tolerância) sem reporte
@@ -769,7 +769,7 @@ function horaDisparo(n){const m=String(n).match(/^(\d{1,2})(?:[:h](\d{2}))?/);re
 function atrasado(nome,st){
   if(supDia!==hoje()||st!=="aguardando")return false;
   const h=horaDisparo(nome);if(h==null)return false;
-  const a=new Date();return a.getHours()*60+a.getMinutes()>h+15;
+  return minAgora()>h+15;
 }
 const ST={aguardando:{t:"Aguardando",e:"⏳"},andamento:{t:"Em andamento",e:"🔄"},concluido:{t:"Concluído",e:"✅"},problema:{t:"Com problema",e:"⚠️"}};
 let supMarks=[],supRecargas=[],valRes=null,valCarregando=false,supChecks=[],supSub="hora",supItems=[],supCfg=null,supPronto=false,supEditId=null,supConfirm=null,pagina="custos";
@@ -824,7 +824,7 @@ function abrirSup(item){
   $("supTitle").textContent=item?"Editar reporte":"Novo reporte";
   const agora=new Date();
   $("rData").value=item?.data||supDia;
-  $("rHora").value=item?.hora||(String(agora.getHours()).padStart(2,"0")+":00");
+  $("rHora").value=item?.hora||(spParts().hour+":00");
   const anterior=supItems.filter(i=>i.data===supDia).sort((a,b)=>a.hora.localeCompare(b.hora)).pop();
   let sug=item?.responsavel||"";
   if(!sug){const t=turnoDe(minAgora());const r=t&&supResp().find(x=>x.toLowerCase().includes(t.chave));sug=r||anterior?.responsavel||""}
