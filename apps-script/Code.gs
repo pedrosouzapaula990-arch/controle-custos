@@ -67,6 +67,8 @@ function executar_(action, p) {
   if (action === "kommoStatus") return statusKommo_();
   if (action === "puxarKommo") return { ok: false, error: "A extração agora roda no Netlify." };
   if (action === "importar") return importarKommo_(p);
+  if (action === "importarMeta") return importarMeta_(p);
+  if (action === "metaList") return metaList_();
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -841,4 +843,48 @@ function configurarKommo() {
   [[7, 0], [12, 30], [19, 45]].forEach(([h, m]) => ScriptApp.newTrigger("puxarBasesKommo").timeBased().everyDays(1).atHour(h).nearMinute(m).create());
   const r = puxarBasesKommo();
   Logger.log(JSON.stringify(r));
+}
+
+
+// ---------- META ADS (tráfego pago) ----------
+const META_ABA = "Meta Ads";
+const META_COLS = ["data","campanhaId","campanha","gasto","impressoes","cliques","ctr","cpc","conversas","assinaturas","acoes"];
+function importarMeta_(p) {
+  const dig = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(p.segredo || "")).map(b => ("0" + (b & 255).toString(16)).slice(-2)).join("");
+  if (!p.segredo || dig !== "926df7157db3de0bda1e36325ec2ff020b1b0536dc4c2e579c049e21fb07174f") return { ok: false, error: "Chave da ponte inválida" };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss = SpreadsheetApp.openById(PLANILHA_ID);
+    const sh = ss.getSheetByName(META_ABA) || ss.insertSheet(META_ABA);
+    const linhas = p.linhas || [];
+    if (sh.getLastRow() < 1) { sh.getRange(1, 1, 1, META_COLS.length).setValues([META_COLS]); sh.setFrozenRows(1); }
+    sh.getRange(1, 1, sh.getMaxRows(), 2).setNumberFormat("@");
+    const desde = String(p.desde || "");
+    // mantém o histórico anterior à janela e troca o que veio do Meta (datas >= desde)
+    const atual = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, META_COLS.length).getValues() : [];
+    const tz = Session.getScriptTimeZone();
+    const dstr = v => ehData_(v) ? Utilities.formatDate(v, tz, "yyyy-MM-dd") : String(v);
+    const mantidas = atual.filter(r => r[0] && dstr(r[0]) < desde).map(r => { r[0] = dstr(r[0]); r[1] = String(r[1]); return r; });
+    const novas = linhas.map(l => META_COLS.map(c => l[c] === undefined || l[c] === null ? "" : l[c]));
+    const todas = mantidas.concat(novas);
+    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, META_COLS.length).clearContent();
+    if (todas.length) sh.getRange(2, 1, todas.length, META_COLS.length).setValues(todas);
+    PropertiesService.getScriptProperties().setProperty("META_ULTIMA", new Date().toISOString());
+    return { ok: true, gravadas: novas.length, total: todas.length };
+  } finally { lock.releaseLock(); }
+}
+function metaList_() {
+  const ss = SpreadsheetApp.openById(PLANILHA_ID);
+  const sh = ss.getSheetByName(META_ABA);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, items: [], ultima: "" };
+  const tz = Session.getScriptTimeZone();
+  const items = sh.getRange(2, 1, sh.getLastRow() - 1, META_COLS.length).getValues().filter(r => r[0]).map(r => {
+    const o = {};
+    META_COLS.forEach((c, i) => { let v = r[i]; if (ehData_(v)) v = Utilities.formatDate(v, tz, "yyyy-MM-dd"); o[c] = v; });
+    ["gasto","impressoes","cliques","ctr","cpc","conversas","assinaturas"].forEach(k => o[k] = Number(o[k]) || 0);
+    delete o.acoes;
+    return o;
+  });
+  return { ok: true, items: items, ultima: PropertiesService.getScriptProperties().getProperty("META_ULTIMA") || "" };
 }
