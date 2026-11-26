@@ -1,5 +1,6 @@
 // Extração do Meta Ads (tráfego pago): gasto, cliques, conversas e assinaturas por dia e por campanha.
 // Variável no Netlify: META_TOKEN (nunca vai para o código). Grava na aba "Meta Ads" via Apps Script.
+import { getStore } from "@netlify/blobs";
 const APPS = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
 const CONTA = "act_1583593523071280";
 const V = "v21.0";
@@ -31,6 +32,12 @@ export default async (req) => {
       }
       u = j.paging && j.paging.next || null;
     }
+    // cópia rápida no Netlify (o site lê daqui): mantém o histórico antigo e troca a janela atual
+    const store = getStore("meta");
+    const antigo = (await store.get("linhas", { type: "json" })) || [];
+    const slim = linhas.map(({ acoes, ...o }) => o);
+    await store.setJSON("linhas", antigo.filter(x => x.data < desde).concat(slim));
+    await store.setJSON("ultima", { em: new Date().toISOString() });
     const r = await fetch(APPS, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "importarMeta", segredo: process.env.IMPORT_SECRET, desde, linhas }), redirect: "follow" });
     const j = JSON.parse(await r.text());
     if (!j.ok) return json({ ok: false, error: j.error || "Apps Script recusou" }, 502);

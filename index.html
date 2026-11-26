@@ -992,7 +992,7 @@ function renderCalcSub(){
 document.querySelectorAll("[data-csub]").forEach(b=>b.onclick=()=>{calcSub=b.dataset.csub;renderCalcSub();if(calcSub==="meta"&&!valRes)loadSup().then(()=>loadVal(false))});
 let dashSub="resumo",vendMes=null,adMes=null,metaAds=null;
 let adsCarregando=false;
-async function loadAds(){if(adsCarregando)return;adsCarregando=true;try{const r=await api("metaList",{});metaAds=r.items||[]}catch(e){metaAds=[];adsErro=e.message}adsCarregando=false;if(dashSub==="trafego")renderDash()}
+async function loadAds(){if(adsCarregando)return;adsCarregando=true;try{const r=await fetch("/meta-dados",{cache:"no-store"});const j=await r.json();if(!j.ok)throw new Error(j.error||"Falha");metaAds=j.items||[];if(!metaAds.length)adsErro="Ainda sem dados: abra /meta-extrair uma vez."}catch(e){metaAds=[];adsErro=e.message}adsCarregando=false;if(dashSub==="trafego")renderDash()}
 let adsErro="";
 function metaLer(){try{const m=JSON.parse(localStorage.getItem("meta_v1")||"null");if(m&&m.alvo&&m.mes)return m}catch(e){}const d=new Date();d.setMonth(d.getMonth()+2);return {alvo:10000,mes:ym(d)}}
 function renderDash(){
