@@ -382,6 +382,7 @@ const SupCore = (() => {
         ${tabela}<div class="card"><h2>Vendas por mês</h2>${barras(meses.map(m => [mesCurto(m), (sr.vendasMes || {})[m] || 0]))}</div>${htmlQualidadeVendedor(res)}`;
     }
     if (sub === "trafego") {
+      const nomeMes = m => new Date(+m.slice(0, 4), +m.slice(5, 7) - 1, 15).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
       const ads = c.ads && c.ads.filter(a => (a.data || "") >= "2026-11-26"); // mostra só a partir de 26/11/2026
       if (!ads) return '<div class="empty">Carregando o tráfego pago…</div>';
       const adsMes = [...new Set(ads.map(a => (a.data || "").slice(0, 7)))].filter(Boolean).sort().reverse();
