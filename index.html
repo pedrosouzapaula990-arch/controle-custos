@@ -991,14 +991,16 @@ function renderCalcSub(){
 }
 document.querySelectorAll("[data-csub]").forEach(b=>b.onclick=()=>{calcSub=b.dataset.csub;renderCalcSub();if(calcSub==="meta"&&!valRes)loadSup().then(()=>loadVal(false))});
 let dashSub="resumo",vendMes=null,adMes=null,metaAds=null;
-async function loadAds(){try{const r=await api("metaList",{});metaAds=r.items||[]}catch(e){metaAds=[]}if(dashSub==="trafego")renderDash()}
+let adsCarregando=false;
+async function loadAds(){if(adsCarregando)return;adsCarregando=true;try{const r=await api("metaList",{});metaAds=r.items||[]}catch(e){metaAds=[];adsErro=e.message}adsCarregando=false;if(dashSub==="trafego")renderDash()}
+let adsErro="";
 function metaLer(){try{const m=JSON.parse(localStorage.getItem("meta_v1")||"null");if(m&&m.alvo&&m.mes)return m}catch(e){}const d=new Date();d.setMonth(d.getMonth()+2);return {alvo:10000,mes:ym(d)}}
 function renderDash(){
   document.querySelectorAll("[data-dsub]").forEach(b=>b.classList.toggle("on",b.dataset.dsub===dashSub));
   const key=ym(new Date());
   $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:metaLer(),vendMes:vendMes,ads:metaAds,adMes:adMes,custos:items.filter(i=>(i.data||"").startsWith(key))});
   if(dashSub==="vendas"&&$("vdMes"))$("vdMes").onchange=()=>{vendMes=$("vdMes").value;renderDash()};
-  if(dashSub==="trafego"){if($("adMes"))$("adMes").onchange=()=>{adMes=$("adMes").value;renderDash()};if(metaAds===null)loadAds()}
+  if(dashSub==="trafego"){if($("adMes"))$("adMes").onchange=()=>{adMes=$("adMes").value;renderDash()};if(metaAds===null)loadAds();if(metaAds&&!metaAds.length&&adsErro&&$("dashBox"))$("dashBox").innerHTML+=`<div class="hint">Erro: ${adsErro}</div>`}
 }
 document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
 $("dashAtual").onclick=()=>{metaAds=null;load();loadSup().then(()=>loadVal(true))};
