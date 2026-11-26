@@ -359,11 +359,27 @@ const SupCore = (() => {
         <div class="field"><label for="mtMes">Quero chegar nisso até o mês de</label><input id="mtMes" type="month" value="${esc(mt.mes)}"></div></div></div><div id="metaOut">${htmlMeta(res, mt)}</div>`; }
     if (sub === "credito") return htmlCredito(res, c.recargas, false, true);
     if (sub === "vendas") {
-      const dias = Object.entries(sr.vendasDia || {}).sort().map(([d, v]) => [d.slice(8, 10) + "/" + d.slice(5, 7), v]);
-      const vend = Object.entries(res.vendedores || {}).sort((a, b) => b[1].vendas - a[1].vendas).map(([nm, x]) => [nm, x.vendas]);
-      return `<div class="kpis">${k("Vendas no mês", n(vendas), "clientes com data de cadastro no mês")}${k("Vendas em créditos", n(co.vendas), "telas × meses")}${k("Renovações", n(ren), n(co.renovacoes) + " créditos")}${k("Média por dia", n(Math.round(vendas / Math.max(1, +res.hoje.slice(8, 10)))), "vendas/dia")}</div>
-        <div class="grid2"><div class="card"><h2>Vendas por vendedor (mês)</h2>${barras(vend)}</div><div class="card"><h2>Vendas por dia (mês)</h2>${barras(dias)}</div></div>
-        <div class="card"><h2>Vendas por mês</h2>${barras(meses.map(m => [mesCurto(m), (sr.vendasMes || {})[m] || 0]))}</div>${htmlQualidadeVendedor(res)}`;
+      const sv = sr.vendasVend || {}, mesesDisp = [...new Set([...Object.keys(sr.vendasMes || {}), res.mes])].filter(m => /^\d{4}-\d{2}$/.test(m)).sort().reverse().slice(0, 13);
+      const mSel = (c.vendMes && mesesDisp.includes(c.vendMes)) ? c.vendMes : res.mes;
+      const nomeMes = m => new Date(+m.slice(0, 4), +m.slice(5, 7) - 1, 15).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const filtro = `<div class="card" style="margin-bottom:12px"><div class="field" style="margin:0;max-width:260px"><label for="vdMes">Mês das vendas</label><select id="vdMes">${mesesDisp.map(m => `<option value="${m}"${m === mSel ? " selected" : ""}>${nomeMes(m)}</option>`).join("")}</select></div></div>`;
+      let porV = sv[mSel];
+      if (!porV && mSel === res.mes) { porV = {}; Object.entries(res.vendedores || {}).forEach(([nm, x]) => { porV[nm] = { _t: x.vendas }; }); }
+      porV = porV || {};
+      const tot = o => Object.values(o).reduce((a, x) => a + (+x || 0), 0);
+      const vend = Object.entries(porV).map(([nm, o]) => [nm, o._t != null ? o._t : tot(o)]).sort((a, b) => b[1] - a[1]);
+      const nDias = new Date(+mSel.slice(0, 4), +mSel.slice(5, 7), 0).getDate();
+      const porDia = {}; Object.values(porV).forEach(o => Object.entries(o).forEach(([d, q]) => { if (d !== "_t") porDia[d] = (porDia[d] || 0) + q; }));
+      const dias = Object.entries(porDia).sort().map(([d, v]) => [d.slice(8, 10) + "/" + d.slice(5, 7), v]);
+      const totalMes = vend.reduce((a, x) => a + x[1], 0);
+      const cab = Array.from({ length: nDias }, (_, i) => `<td class="hint num">${i + 1}</td>`).join("");
+      const linhas = vend.map(([nm]) => { const o = porV[nm] || {};
+        return `<tr><td><b>${esc(nm)}</b></td>${Array.from({ length: nDias }, (_, i) => { const d = mSel + "-" + String(i + 1).padStart(2, "0"); return `<td class="num">${o[d] ? o[d] : '<span class="hint">·</span>'}</td>`; }).join("")}<td class="num"><b>${n(o._t != null ? o._t : tot(o))}</b></td></tr>`; }).join("");
+      const rodape = `<tr><td><b>Total</b></td>${Array.from({ length: nDias }, (_, i) => { const d = mSel + "-" + String(i + 1).padStart(2, "0"); return `<td class="num"><b>${porDia[d] || '<span class="hint">·</span>'}</b></td>`; }).join("")}<td class="num"><b>${n(totalMes)}</b></td></tr>`;
+      const tabela = vend.length && Object.keys(porDia).length ? `<div class="card"><h2>Vendas por dia, por vendedor · ${esc(nomeMes(mSel))}</h2><div style="overflow-x:auto"><table class="dtab" style="min-width:${Math.max(640, nDias * 34 + 160)}px"><tr><td class="hint">Vendedor</td>${cab}<td class="hint num">Total</td></tr>${linhas}${rodape}</table></div><div class="hint" style="margin-top:6px">Vendas pela data de cadastro. Os dias aparecem depois do próximo cálculo das bases.</div></div>` : "";
+      return `${filtro}<div class="kpis">${k("Vendas no mês", n(vendas), "clientes com data de cadastro no mês atual")}${k("Vendas em créditos", n(co.vendas), "telas × meses")}${k("Renovações", n(ren), n(co.renovacoes) + " créditos")}${k("Média por dia", n(Math.round(vendas / Math.max(1, +res.hoje.slice(8, 10)))), "no mês atual")}${k("Vendas em " + nomeMes(mSel).split(" ")[0], n(totalMes), "mês selecionado")}</div>
+        <div class="grid2"><div class="card"><h2>Vendas por vendedor · ${esc(nomeMes(mSel))}</h2>${barras(vend)}</div><div class="card"><h2>Vendas por dia · ${esc(nomeMes(mSel))}</h2>${barras(dias)}</div></div>
+        ${tabela}<div class="card"><h2>Vendas por mês</h2>${barras(meses.map(m => [mesCurto(m), (sr.vendasMes || {})[m] || 0]))}</div>${htmlQualidadeVendedor(res)}`;
     }
     if (sub === "trafego") {
       const l = [...trafego].sort((a, b) => (b.data || "").localeCompare(a.data || ""));

@@ -367,7 +367,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
   const diaHoje = +hoje.slice(8, 10);
   const ativosIds = [], vencidosIds = [], idsB = {};
   const ativ = { agora: 0, porBase: {}, vendasMes: 0, naoRenovaram: 0, renovados: 0, venceRestoMes: 0, vendasHoje: 0 };
-  const vend = {}, detAt = {}, serie = { vendasDia: {}, vendasMes: {}, renovMes: {}, porBase: {} };
+  const vend = {}, detAt = {}, serie = { vendasDia: {}, vendasMes: {}, renovMes: {}, porBase: {}, vendasVend: {} };
 
   bases.forEach(b => {
     const faltando = COLS_BASE.filter(c => !b.cols[c]);
@@ -404,6 +404,7 @@ function calcularValidacao(bases, hoje, desde, inicioAuto) {
         else { vencidosIds.push(idA); if (dvA.slice(0, 7) === mesAtual) { ativ.naoRenovaram++; dB.naoRenovaram++; } }
       }
       if (dc) { serie.vendasMes[dc.slice(0, 7)] = (serie.vendasMes[dc.slice(0, 7)] || 0) + 1; if (dc.slice(0, 7) === mesAtual) serie.vendasDia[dc] = (serie.vendasDia[dc] || 0) + 1; }
+      if (dc) { const mV = dc.slice(0, 7), nV = v("Vendedor") || "(sem vendedor)"; const o1 = serie.vendasVend[mV] = serie.vendasVend[mV] || {}, o2 = o1[nV] = o1[nV] || {}; o2[dc] = (o2[dc] || 0) + 1; }
       if (dr) { serie.renovMes[dr.slice(0, 7)] = (serie.renovMes[dr.slice(0, 7)] || 0) + 1; }
       if (inCad) { ativ.vendasMes++; dB.vendasMes++; if (dc === hoje) ativ.vendasHoje++; }
       if (dr && dr.slice(0, 7) === mesAtual && dr <= hoje) { ativ.renovados++; dB.renovados++; }
