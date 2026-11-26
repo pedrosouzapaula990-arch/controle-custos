@@ -449,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1795697446"></script>
+<script src="suporte/sup-core.js?v=1795706461"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -990,16 +990,18 @@ function renderCalcSub(){
   if($("mtAlvo")){const upd=()=>{const m={alvo:+$("mtAlvo").value||0,mes:$("mtMes").value};try{localStorage.setItem("meta_v1",JSON.stringify(m))}catch(e){}$("metaOut").innerHTML=SupCore.htmlMeta(valRes,m)};$("mtAlvo").oninput=upd;$("mtMes").oninput=upd}
 }
 document.querySelectorAll("[data-csub]").forEach(b=>b.onclick=()=>{calcSub=b.dataset.csub;renderCalcSub();if(calcSub==="meta"&&!valRes)loadSup().then(()=>loadVal(false))});
-let dashSub="resumo",vendMes=null;
+let dashSub="resumo",vendMes=null,adMes=null,metaAds=null;
+async function loadAds(){try{const r=await api("metaList",{});metaAds=r.items||[]}catch(e){metaAds=[]}if(dashSub==="trafego")renderDash()}
 function metaLer(){try{const m=JSON.parse(localStorage.getItem("meta_v1")||"null");if(m&&m.alvo&&m.mes)return m}catch(e){}const d=new Date();d.setMonth(d.getMonth()+2);return {alvo:10000,mes:ym(d)}}
 function renderDash(){
   document.querySelectorAll("[data-dsub]").forEach(b=>b.classList.toggle("on",b.dataset.dsub===dashSub));
   const key=ym(new Date());
-  $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:metaLer(),vendMes:vendMes,custos:items.filter(i=>(i.data||"").startsWith(key))});
+  $("dashBox").innerHTML=SupCore.htmlDashboard(dashSub,{res:valRes,recargas:supRecargas,marks:supMarks,brl:brl,meta:metaLer(),vendMes:vendMes,ads:metaAds,adMes:adMes,custos:items.filter(i=>(i.data||"").startsWith(key))});
   if(dashSub==="vendas"&&$("vdMes"))$("vdMes").onchange=()=>{vendMes=$("vdMes").value;renderDash()};
+  if(dashSub==="trafego"){if($("adMes"))$("adMes").onchange=()=>{adMes=$("adMes").value;renderDash()};if(metaAds===null)loadAds()}
 }
 document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
-$("dashAtual").onclick=()=>{load();loadSup().then(()=>loadVal(true))};
+$("dashAtual").onclick=()=>{metaAds=null;load();loadSup().then(()=>loadVal(true))};
 function rota(){
   pagina=location.hash==="#suporte"?"suporte":location.hash==="#calculadora"?"calc":location.hash==="#dashboard"?"dash":"custos";
   $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";$("pgDash").hidden=pagina!=="dash";

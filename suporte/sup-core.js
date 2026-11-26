@@ -382,10 +382,36 @@ const SupCore = (() => {
         ${tabela}<div class="card"><h2>Vendas por mês</h2>${barras(meses.map(m => [mesCurto(m), (sr.vendasMes || {})[m] || 0]))}</div>${htmlQualidadeVendedor(res)}`;
     }
     if (sub === "trafego") {
-      const l = [...trafego].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
-      return `<div class="kpis">${k("Gasto em anúncios", brl(totTraf), "no mês, das categorias de anúncios")}${k("Vendas no mês", n(vendas), "")}${k("Custo por venda", cpv ? brl(cpv) : "—", "anúncios ÷ vendas")}${k("Lançamentos", n(l.length), "de anúncios")}</div>
-        <div class="card"><h2>Lançamentos de anúncios</h2>${l.length ? l.map(i => `<div class="rep" style="grid-template-columns:90px 1fr auto"><div class="h">${esc((i.data || "").split("-").reverse().join("/"))}</div><div>${esc(i.descricao || "")}<div class="meta">${esc(i.categoria || "")}</div></div><div><b>${brl(+i.valor)}</b></div></div>`).join("") : '<div class="empty">Nenhum lançamento de anúncios neste mês.</div>'}</div>
-        <div class="hint">Conta as categorias com "anúncio", "tráfego" ou "Meta Ads" no nome.</div>`;
+      const ads = c.ads && c.ads.filter(a => (a.data || "") >= "2026-11-26"); // mostra só a partir de 26/11/2026
+      if (!ads) return '<div class="empty">Carregando o tráfego pago…</div>';
+      const adsMes = [...new Set(ads.map(a => (a.data || "").slice(0, 7)))].filter(Boolean).sort().reverse();
+      if (!adsMes.length) return '<div class="empty">Sem dados do Meta Ads a partir de 26/11/2026.</div>';
+      const mA = (c.adMes && adsMes.includes(c.adMes)) ? c.adMes : (adsMes.includes(res.mes) ? res.mes : adsMes[0]);
+      const L = ads.filter(a => (a.data || "").startsWith(mA));
+      const sm = f => L.reduce((a, x) => a + (+x[f] || 0), 0);
+      const gasto = sm("gasto"), imp = sm("impressoes"), cli = sm("cliques"), conv = sm("conversas"), ass = sm("assinaturas");
+      const vd = ((res.serie || {}).vendasVend || {})[mA] || {}, vPorDia = {};
+      Object.values(vd).forEach(o => Object.entries(o).forEach(([d, q]) => vPorDia[d] = (vPorDia[d] || 0) + q));
+      const vMes = Object.values(vPorDia).reduce((a, b) => a + b, 0);
+      const d2 = x => (+x || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const div = (a, b) => b ? brl(a / b) : "—";
+      const porDia = {}, porCamp = {};
+      L.forEach(x => {
+        const d = porDia[x.data] = porDia[x.data] || { gasto: 0, cliques: 0, conversas: 0, assinaturas: 0 };
+        d.gasto += x.gasto; d.cliques += x.cliques; d.conversas += x.conversas; d.assinaturas += x.assinaturas;
+        const cp = porCamp[x.campanha] = porCamp[x.campanha] || { gasto: 0, cliques: 0, conversas: 0, assinaturas: 0 };
+        cp.gasto += x.gasto; cp.cliques += x.cliques; cp.conversas += x.conversas; cp.assinaturas += x.assinaturas;
+      });
+      const dd = x => x.split("-").reverse().slice(0, 2).join("/");
+      const dias = Object.keys(porDia).sort().reverse();
+      const filtro = `<div class="card" style="margin-bottom:12px"><div class="field" style="margin:0;max-width:260px"><label for="adMes">Mês do tráfego</label><select id="adMes">${adsMes.map(m => `<option value="${m}"${m === mA ? " selected" : ""}>${nomeMes(m)}</option>`).join("")}</select></div></div>`;
+      const th = t => `<td class="hint">${t}</td>`;
+      const lin = (nm, o, v) => `<tr><td><b>${nm}</b></td><td>${brl(o.gasto)}</td><td>${n(o.cliques)}</td><td>${n(o.conversas)}</td><td>${div(o.gasto, o.conversas)}</td><td>${n(o.assinaturas)}</td><td>${div(o.gasto, o.assinaturas)}</td>${v === undefined ? "" : `<td>${n(v)}</td><td>${div(o.gasto, v)}</td>`}</tr>`;
+      const cab = extra => `<tr>${th("")}${th("Gasto")}${th("Cliques")}${th("Msgs iniciadas")}${th("Custo/msg")}${th("Assinaturas")}${th("Custo/assin.")}${extra || ""}</tr>`;
+      return `${filtro}<div class="kpis">${k("Gasto", brl(gasto), nomeMes(mA))}${k("Impressões", n(imp), "CTR " + (imp ? d2(cli / imp * 100) : "0,00") + "%")}${k("Cliques", n(cli), "CPC " + div(gasto, cli))}${k("Msgs iniciadas", n(conv), "custo " + div(gasto, conv))}${k("Assinaturas (Meta)", n(ass), "custo " + div(gasto, ass))}${k("Custo por venda", div(gasto, vMes), n(vMes) + " vendas no Kommo")}</div>
+        <div class="card"><h2>Por dia</h2><div style="max-height:50vh;overflow-y:auto"><table class="dtab">${cab(th("Vendas Kommo") + th("Custo/venda"))}${dias.map(d => lin(dd(d), porDia[d], vPorDia[d] || 0)).join("")}</table></div></div>
+        <div class="card"><h2>Por campanha</h2><div style="overflow-x:auto"><table class="dtab">${cab()}${Object.entries(porCamp).sort((a, b) => b[1].gasto - a[1].gasto).map(([nm, o]) => lin(esc(nm), o)).join("")}</table></div></div>
+        <div class="hint">Fonte: Meta Ads (atualiza 3x ao dia). "Assinaturas" é o evento personalizado do pixel; "Vendas Kommo" são os cadastros do dia.</div>`;
     }
     if (sub === "ativos") {
       const mov = at.movimento || {}, tab = (lista, vazio) => `<div style="max-height:46vh;overflow-y:auto"><table class="dtab"><tr><td class="hint">Cliente</td><td class="hint">Motivo</td><td class="hint">Etapa</td><td class="hint">Vencimento</td></tr>${lista.map(x => `<tr><td><b>${esc(x.cliente || "(sem nome)")}</b><div class="hint">ID ${esc(x.id)} · ${esc(x.base)} · ${esc(x.vendedor || "—")}</div></td><td>${esc(x.motivo)}</td><td class="hint">${esc(x.etapa)}</td><td class="hint">${esc(x.venc ? x.venc.split("-").reverse().join("/") : "—")}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">${vazio}</td></tr>`}</table></div>`;

@@ -6,7 +6,7 @@ const V = "v21.0";
 const TZ = "America/Sao_Paulo";
 const DIAS = 45;
 const CONVERSA = ["onsite_conversion.messaging_conversation_started_7d"];
-const ASSINA = ["omni_subscribe", "subscribe_total", "offsite_conversion.fb_pixel_subscribe", "subscribe_website", "subscribe_mobile_app", "onsite_web_subscribe"];
+const ASSINA = ["offsite_conversion.fb_pixel_custom", "omni_subscribe", "subscribe_total", "offsite_conversion.fb_pixel_subscribe", "subscribe_website", "subscribe_mobile_app", "onsite_web_subscribe"];
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 const dia = d => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 const pega = (lista, tipos) => { for (const t of tipos) { const a = (lista || []).find(x => x.action_type === t); if (a) return +a.value || 0; } return 0; };
