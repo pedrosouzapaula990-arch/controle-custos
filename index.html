@@ -449,7 +449,7 @@ body.pg-calc #addFab,body.pg-dash #addFab{display:none!important}
   </form>
 </div>
 
-<script src="suporte/sup-core.js?v=1795706899"></script>
+<script src="suporte/sup-core.js?v=1795708247"></script>
 <script>
 // ====== CONFIGURAÇÃO: cole aqui a URL do Web App do Apps Script ======
 const API_URL = "https://script.google.com/macros/s/AKfycby4poOb53Ar1FQ9IGSeeMScNtIkbFwJjhDqIWfgPqjZz-8alFa7NNWt9Exg9jnK-AGtCQ/exec";
@@ -1003,7 +1003,7 @@ function renderDash(){
   if(dashSub==="trafego"){if($("adMes"))$("adMes").onchange=()=>{adMes=$("adMes").value;renderDash()};if(metaAds===null)loadAds();if(metaAds&&!metaAds.length&&adsErro&&$("dashBox"))$("dashBox").innerHTML+=`<div class="hint">Erro: ${adsErro}</div>`}
 }
 document.querySelectorAll("[data-dsub]").forEach(b=>b.onclick=()=>{dashSub=b.dataset.dsub;renderDash()});
-$("dashAtual").onclick=()=>{metaAds=null;load();loadSup().then(()=>loadVal(true))};
+$("dashAtual").onclick=()=>{metaAds=null;fetch("/meta-extrair").catch(()=>{}).then(()=>{if(dashSub==="trafego")loadAds()});load();loadSup().then(()=>loadVal(true))};
 function rota(){
   pagina=location.hash==="#suporte"?"suporte":location.hash==="#calculadora"?"calc":location.hash==="#dashboard"?"dash":"custos";
   $("pgCustos").hidden=pagina!=="custos";$("pgSuporte").hidden=pagina!=="suporte";$("pgCalc").hidden=pagina!=="calc";$("pgDash").hidden=pagina!=="dash";
